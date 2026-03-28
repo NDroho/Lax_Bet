@@ -1,0 +1,29 @@
+:root {
+  --bg: #0a0e14;
+  --surface: #131820;
+  --surface-2: #1a2030;
+  --surface-3: #222a3a;
+  --border: #2a3344;
+  --text-primary: #e8ecf2;
+  --text-dim: #7a8599;
+  --text-muted: #4a5568;
+  --accent: #4fc3f7;
+  --accent-2: #81d4fa;
+  --green: #66bb6a;
+  --red: #ef5350;
+  --amber: #ffca28;
+  --bar-bg: #1e2738;
+  --font-display: 'Bebas Neue', sans-serif;
+  --font-body: 'DM Sans', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  margin: 0;
+  padding: 0;
+}
