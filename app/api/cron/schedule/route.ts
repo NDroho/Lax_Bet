@@ -56,7 +56,6 @@ async function fetchESPN(dateStr: string): Promise<GameEntry[]> {
         }
       }
 
-      console.log(`ESPN (${slug}): found ${games.length} games`);
       return games;
     } catch (err: any) {
       console.error(`ESPN (${slug}) error:`, err.message);
@@ -91,7 +90,6 @@ async function fetchNCAA(dateStr: string): Promise<GameEntry[]> {
       }
     }
 
-    console.log(`NCAA API: found ${games.length} games`);
     return games;
   } catch (err: any) {
     console.error('NCAA API error:', err.message);
@@ -125,8 +123,8 @@ export async function GET(request: Request) {
       return true;
     });
 
-    await kv.set('schedule', JSON.stringify(unique));
-    await kv.set('schedule_updated', new Date().toISOString());
+    await kv.set('schedule_data', unique);
+    await kv.set('schedule_data_updated', new Date().toISOString());
 
     return NextResponse.json({
       success: true,
