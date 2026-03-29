@@ -24,6 +24,57 @@ function WeightSlider({ label, value, onChange, accent }: { label: string; value
   );
 }
 
+// ─── DISCLAIMER POPUP ───
+
+function DisclaimerPopup({ onAccept }: { onAccept: () => void }) {
+  return (
+    <div style={{
+      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+      background: 'rgba(0,0,0,0.85)', zIndex: 9999,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 20,
+    }}>
+      <div style={{
+        background: '#131820', border: '1px solid #2a3344', borderRadius: 12,
+        padding: '32px 28px', maxWidth: 520, width: '100%',
+      }}>
+        <h2 style={{
+          fontFamily: 'var(--font-display)', fontSize: 28, color: 'var(--accent)',
+          letterSpacing: 2, margin: '0 0 6px', lineHeight: 1,
+        }}>LAX EDGE</h2>
+        <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1.5, marginBottom: 20 }}>
+          DISCLAIMER
+        </div>
+
+        <div style={{ fontSize: 13, color: 'var(--text-dim)', lineHeight: 1.7, marginBottom: 24 }}>
+          <p style={{ margin: '0 0 12px' }}>
+            All content on this site is provided <strong style={{ color: 'var(--text-primary)' }}>strictly for informational and entertainment purposes only</strong>.
+          </p>
+          <p style={{ margin: '0 0 12px' }}>
+            LAX EDGE is a <strong style={{ color: 'var(--text-primary)' }}>statistical analysis tool</strong>. All projections and ratings are generated from publicly available NCAA data and are intended solely for informational use.
+          </p>
+          <p style={{ margin: '0 0 12px' }}>
+            Predictions are <strong style={{ color: 'var(--text-primary)' }}>probabilistic estimates</strong> based on historical team performance metrics. They are not guarantees of any outcome and should not be relied upon for any purpose beyond personal informational use.
+          </p>
+          <p style={{ margin: 0 }}>
+            By accessing this site, you acknowledge that all content is provided as-is with no warranty of accuracy, and that you assume all responsibility for how you use this information.
+          </p>
+        </div>
+
+        <button onClick={onAccept} style={{
+          width: '100%', padding: '14px', background: 'var(--accent)', color: '#0a0e14',
+          border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700,
+          fontFamily: 'var(--font-mono)', cursor: 'pointer', letterSpacing: 1.5,
+        }}>
+          I UNDERSTAND — ENTER SITE
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── MAIN DASHBOARD ───
+
 export default function Dashboard() {
   const [teams, setTeams] = useState<TeamStats[]>([]);
   const [schedule, setSchedule] = useState<SlateGame[]>([]);
@@ -36,6 +87,21 @@ export default function Dashboard() {
   const [teamAName, setTeamAName] = useState('');
   const [teamBName, setTeamBName] = useState('');
   const [showWeights, setShowWeights] = useState(false);
+  const [disclaimerAccepted, setDisclaimerAccepted] = useState(false);
+
+  // Check if disclaimer was already accepted this session
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem('lax-edge-disclaimer') === 'accepted') {
+        setDisclaimerAccepted(true);
+      }
+    } catch {}
+  }, []);
+
+  function handleAcceptDisclaimer() {
+    setDisclaimerAccepted(true);
+    try { sessionStorage.setItem('lax-edge-disclaimer', 'accepted'); } catch {}
+  }
 
   useEffect(() => {
     async function loadData() {
@@ -69,8 +135,14 @@ export default function Dashboard() {
 
   const tabs = [{ key: 'slate', label: "TODAY'S SLATE" }, { key: 'predict', label: 'PREDICTOR' }, { key: 'rankings', label: 'RANKINGS' }];
 
+  const FOOTER_DISCLAIMER = 'For informational and entertainment purposes only. All predictions are probabilistic estimates based on publicly available NCAA data and are not guarantees of any outcome. Content is provided as-is with no warranty of accuracy.';
+
   return (
     <div>
+      {/* Disclaimer popup */}
+      {!disclaimerAccepted && <DisclaimerPopup onAccept={handleAcceptDisclaimer} />}
+
+      {/* HEADER */}
       <div style={{ background: 'linear-gradient(135deg, #0d1420 0%, #162030 50%, #0d1825 100%)', borderBottom: '1px solid var(--border)', padding: '20px 24px 16px' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
           <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 36, letterSpacing: 2, color: 'var(--accent)', margin: 0, lineHeight: 1 }}>LAX EDGE</h1>
@@ -78,93 +150,232 @@ export default function Dashboard() {
         </div>
         <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--text-dim)' }}>Matchup predictor & daily schedule</p>
       </div>
+
+      {/* TABS */}
       <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
-        {tabs.map(tab => (<button key={tab.key} onClick={() => setActiveTab(tab.key)} style={{ flex: 1, padding: '12px', background: activeTab === tab.key ? 'var(--surface)' : 'transparent', color: activeTab === tab.key ? 'var(--accent)' : 'var(--text-dim)', border: 'none', borderBottom: activeTab === tab.key ? '2px solid var(--accent)' : '2px solid transparent', fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: 1.5, cursor: 'pointer' }}>{tab.label}</button>))}
+        {tabs.map(tab => (
+          <button key={tab.key} onClick={() => setActiveTab(tab.key)} style={{
+            flex: 1, padding: '12px', background: activeTab === tab.key ? 'var(--surface)' : 'transparent',
+            color: activeTab === tab.key ? 'var(--accent)' : 'var(--text-dim)', border: 'none',
+            borderBottom: activeTab === tab.key ? '2px solid var(--accent)' : '2px solid transparent',
+            fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: 1.5, cursor: 'pointer',
+          }}>{tab.label}</button>
+        ))}
       </div>
+
       <div style={{ padding: '20px 24px', maxWidth: 900, margin: '0 auto' }}>
 
-        {activeTab === 'slate' && (<div>
-          <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1.5, marginBottom: 16 }}>
-            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }).toUpperCase()} — {schedule.length} GAMES
+        {/* ═══ TODAY'S SLATE ═══ */}
+        {activeTab === 'slate' && (
+          <div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1.5, marginBottom: 16 }}>
+              {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }).toUpperCase()} — {schedule.length} GAMES
+            </div>
+            {schedule.length === 0 && (
+              <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '40px 20px', textAlign: 'center' }}>
+                <div style={{ fontSize: 14, color: 'var(--text-dim)', marginBottom: 8 }}>No games scheduled for today</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>Check back on game days or use the Predictor tab</div>
+              </div>
+            )}
+            {schedule.length > 0 && (
+              <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', padding: '10px 20px', borderBottom: '1px solid var(--border)', fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', letterSpacing: 1.2 }}>
+                  <span>MATCHUP</span><span>TIME</span>
+                </div>
+                {schedule.map((g, i) => (
+                  <div key={i} style={{
+                    display: 'grid', gridTemplateColumns: '1fr auto', padding: '12px 20px',
+                    borderBottom: i < schedule.length - 1 ? '1px solid var(--border)' : 'none',
+                    background: i % 2 === 0 ? 'transparent' : 'var(--surface-2)', alignItems: 'center',
+                  }}>
+                    <div>
+                      <span style={{ fontWeight: 700, fontSize: 14 }}>{g.away}</span>
+                      <span style={{ color: 'var(--text-muted)', margin: '0 8px', fontSize: 12 }}>at</span>
+                      <span style={{ fontWeight: 700, fontSize: 14 }}>{g.home}</span>
+                    </div>
+                    <span style={{ fontSize: 12, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
+                      {g.time && g.time !== 'TBD' ? g.time : ''}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-          {schedule.length === 0 && (<div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '40px 20px', textAlign: 'center' }}><div style={{ fontSize: 14, color: 'var(--text-dim)', marginBottom: 8 }}>No games scheduled for today</div><div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>Check back on game days or use the Predictor tab</div></div>)}
-          {schedule.length > 0 && (<div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', padding: '10px 20px', borderBottom: '1px solid var(--border)', fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', letterSpacing: 1.2 }}><span>MATCHUP</span><span>TIME</span></div>
-            {schedule.map((g, i) => (<div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr auto', padding: '12px 20px', borderBottom: i < schedule.length - 1 ? '1px solid var(--border)' : 'none', background: i % 2 === 0 ? 'transparent' : 'var(--surface-2)', alignItems: 'center' }}>
-              <div><span style={{ fontWeight: 700, fontSize: 14 }}>{g.away}</span><span style={{ color: 'var(--text-muted)', margin: '0 8px', fontSize: 12 }}>at</span><span style={{ fontWeight: 700, fontSize: 14 }}>{g.home}</span></div>
-              <span style={{ fontSize: 12, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>{g.time && g.time !== 'TBD' ? g.time : ''}</span>
-            </div>))}
-          </div>)}
-        </div>)}
+        )}
 
-        {activeTab === 'predict' && (<div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 16, alignItems: 'center', marginBottom: 24 }}>
-            <div><label style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1 }}>TEAM A</label><select value={teamAName} onChange={e => setTeamAName(e.target.value)} style={{ width: '100%', marginTop: 4, padding: '10px 12px', background: 'var(--surface-2)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 15, fontWeight: 700 }}>{sortedTeams.map(t => <option key={t.name} value={t.name}>{t.name}</option>)}</select></div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, color: 'var(--text-muted)', marginTop: 16 }}>VS</div>
-            <div><label style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1 }}>TEAM B</label><select value={teamBName} onChange={e => setTeamBName(e.target.value)} style={{ width: '100%', marginTop: 4, padding: '10px 12px', background: 'var(--surface-2)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 15, fontWeight: 700 }}>{sortedTeams.map(t => <option key={t.name} value={t.name}>{t.name}</option>)}</select></div>
+        {/* ═══ PREDICTOR ═══ */}
+        {activeTab === 'predict' && (
+          <div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 16, alignItems: 'center', marginBottom: 24 }}>
+              <div>
+                <label style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1 }}>TEAM A</label>
+                <select value={teamAName} onChange={e => setTeamAName(e.target.value)} style={{
+                  width: '100%', marginTop: 4, padding: '10px 12px', background: 'var(--surface-2)', color: 'var(--text-primary)',
+                  border: '1px solid var(--border)', borderRadius: 6, fontSize: 15, fontWeight: 700,
+                }}>
+                  {sortedTeams.map(t => <option key={t.name} value={t.name}>{t.name}</option>)}
+                </select>
+              </div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, color: 'var(--text-muted)', marginTop: 16 }}>VS</div>
+              <div>
+                <label style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1 }}>TEAM B</label>
+                <select value={teamBName} onChange={e => setTeamBName(e.target.value)} style={{
+                  width: '100%', marginTop: 4, padding: '10px 12px', background: 'var(--surface-2)', color: 'var(--text-primary)',
+                  border: '1px solid var(--border)', borderRadius: 6, fontSize: 15, fontWeight: 700,
+                }}>
+                  {sortedTeams.map(t => <option key={t.name} value={t.name}>{t.name}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {prediction && teamA && teamB && (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 20 }}>
+                  <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '18px 16px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1.5, marginBottom: 8 }}>SPREAD</div>
+                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, lineHeight: 1, color: prediction.spread !== 0 ? 'var(--green)' : 'var(--text-primary)' }}>
+                      {prediction.spread > 0 ? `${teamAName} -${Math.abs(prediction.spread)}` : prediction.spread < 0 ? `${teamBName} -${Math.abs(prediction.spread)}` : 'PICK'}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 6 }}>
+                      {prediction.spread !== 0 ? `${prediction.spread > 0 ? teamAName : teamBName} favored` : 'Even matchup'}
+                    </div>
+                  </div>
+                  <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '18px 16px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1.5, marginBottom: 8 }}>PROJECTED TOTAL</div>
+                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 38, lineHeight: 1, color: 'var(--amber)' }}>{prediction.projTotal}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 6 }}>
+                      {Math.round(prediction.projTotal / 2 + Math.abs(prediction.spread) / 2)}-{Math.round(prediction.projTotal / 2 - Math.abs(prediction.spread) / 2)} proj score
+                    </div>
+                  </div>
+                  <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '18px 16px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1.5, marginBottom: 8 }}>WIN PROB</div>
+                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 38, lineHeight: 1, color: 'var(--accent)' }}>
+                      {Math.round(Math.max(prediction.winProbA, 1 - prediction.winProbA) * 100)}%
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 6 }}>
+                      {prediction.winProbA >= 0.5 ? teamAName : teamBName}
+                      {prediction.mlValue && <span style={{ color: 'var(--green)', marginLeft: 6, fontWeight: 700 }}>★ ML VALUE</span>}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 16 }}>
+                  <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1.5, whiteSpace: 'nowrap' }}>CONFIDENCE</span>
+                  <div style={{ flex: 1 }}><StatBar value={prediction.confidence} max={100} color={prediction.confidence > 70 ? 'var(--green)' : prediction.confidence > 50 ? 'var(--amber)' : 'var(--red)'} /></div>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 700 }}>{prediction.confidence}%</span>
+                </div>
+
+                <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '16px 20px', marginBottom: 20 }}>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1.5, marginBottom: 14 }}>HEAD-TO-HEAD STAT COMPARISON</div>
+                  {[
+                    { label: 'Face-Off Win %', a: teamA.foWin, b: teamB.foWin, fmt: (v: number) => (v * 100).toFixed(1) + '%' },
+                    { label: 'Shot %', a: teamA.shotPct, b: teamB.shotPct, fmt: (v: number) => (v * 100).toFixed(1) + '%' },
+                    { label: 'Save %', a: teamA.savePct, b: teamB.savePct, fmt: (v: number) => (v * 100).toFixed(1) + '%' },
+                    { label: 'TO Margin', a: teamA.causedTurnoversPerGame - teamA.turnoversPerGame, b: teamB.causedTurnoversPerGame - teamB.turnoversPerGame, fmt: (v: number) => (v > 0 ? '+' : '') + v.toFixed(1) },
+                    { label: 'Scoring Off', a: teamA.scoringOff, b: teamB.scoringOff, fmt: (v: number) => v.toFixed(1) },
+                    { label: 'Scoring Def', a: teamA.scoringDef, b: teamB.scoringDef, fmt: (v: number) => v.toFixed(1), invert: true },
+                    { label: 'Clear %', a: teamA.clearPct, b: teamB.clearPct, fmt: (v: number) => (v * 100).toFixed(1) + '%' },
+                    { label: 'Power Rating', a: prediction.ratingA, b: prediction.ratingB, fmt: (v: number) => v.toFixed(1) },
+                  ].map((row, i) => {
+                    const aWins = row.invert ? row.a < row.b : row.a > row.b;
+                    const bWins = row.invert ? row.b < row.a : row.b > row.a;
+                    return (
+                      <div key={i} style={{ display: 'grid', gridTemplateColumns: '80px 1fr 110px 1fr 80px', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                        <span style={{ textAlign: 'right', fontSize: 13, fontFamily: 'var(--font-mono)', fontWeight: 700, color: aWins ? 'var(--green)' : 'var(--text-dim)' }}>{row.fmt(row.a)}</span>
+                        <div style={{ height: 4, borderRadius: 2, background: aWins ? 'var(--green)' : 'var(--bar-bg)', opacity: aWins ? 0.6 : 0.3 }} />
+                        <span style={{ textAlign: 'center', fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{row.label}</span>
+                        <div style={{ height: 4, borderRadius: 2, background: bWins ? 'var(--green)' : 'var(--bar-bg)', opacity: bWins ? 0.6 : 0.3 }} />
+                        <span style={{ textAlign: 'left', fontSize: 13, fontFamily: 'var(--font-mono)', fontWeight: 700, color: bWins ? 'var(--green)' : 'var(--text-dim)' }}>{row.fmt(row.b)}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
+            <button onClick={() => setShowWeights(!showWeights)} style={{
+              background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 16px', width: '100%',
+              color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: 11, cursor: 'pointer', letterSpacing: 1,
+            }}>
+              {showWeights ? '▾ HIDE' : '▸ SHOW'} MODEL WEIGHTS
+            </button>
+            {showWeights && (
+              <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '16px 20px', marginTop: 12 }}>
+                <WeightSlider label="Face-Off %" value={weights.faceOff} onChange={v => updateWeight('faceOff', v)} accent="var(--accent)" />
+                <WeightSlider label="Clear %" value={weights.clearPct} onChange={v => updateWeight('clearPct', v)} accent="#81d4fa" />
+                <WeightSlider label="Shot %" value={weights.shotPct} onChange={v => updateWeight('shotPct', v)} accent="var(--green)" />
+                <WeightSlider label="TO Margin" value={weights.turnoverMargin} onChange={v => updateWeight('turnoverMargin', v)} accent="var(--amber)" />
+                <WeightSlider label="Save %" value={weights.savePct} onChange={v => updateWeight('savePct', v)} accent="var(--red)" />
+                <WeightSlider label="Def Eff" value={weights.defEff} onChange={v => updateWeight('defEff', v)} accent="#80cbc4" />
+                <WeightSlider label="EMO" value={weights.emo} onChange={v => updateWeight('emo', v)} accent="#ce93d8" />
+                <button onClick={() => setWeights(DEFAULT_WEIGHTS)} style={{
+                  marginTop: 8, padding: '6px 14px', background: 'var(--surface-3)', border: '1px solid var(--border)',
+                  borderRadius: 5, color: 'var(--text-dim)', fontSize: 11, fontFamily: 'var(--font-mono)', cursor: 'pointer',
+                }}>RESET DEFAULTS</button>
+              </div>
+            )}
           </div>
-          {prediction && teamA && teamB && (<>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 20 }}>
-              <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '18px 16px', textAlign: 'center' }}><div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1.5, marginBottom: 8 }}>SPREAD</div><div style={{ fontFamily: 'var(--font-display)', fontSize: 28, lineHeight: 1, color: prediction.spread !== 0 ? 'var(--green)' : 'var(--text-primary)' }}>{prediction.spread > 0 ? `${teamAName} -${Math.abs(prediction.spread)}` : prediction.spread < 0 ? `${teamBName} -${Math.abs(prediction.spread)}` : 'PICK'}</div><div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 6 }}>{prediction.spread !== 0 ? `${prediction.spread > 0 ? teamAName : teamBName} favored` : 'Even matchup'}</div></div>
-              <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '18px 16px', textAlign: 'center' }}><div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1.5, marginBottom: 8 }}>PROJECTED TOTAL</div><div style={{ fontFamily: 'var(--font-display)', fontSize: 38, lineHeight: 1, color: 'var(--amber)' }}>{prediction.projTotal}</div><div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 6 }}>{Math.round(prediction.projTotal / 2 + Math.abs(prediction.spread) / 2)}-{Math.round(prediction.projTotal / 2 - Math.abs(prediction.spread) / 2)} proj score</div></div>
-              <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '18px 16px', textAlign: 'center' }}><div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1.5, marginBottom: 8 }}>WIN PROB</div><div style={{ fontFamily: 'var(--font-display)', fontSize: 38, lineHeight: 1, color: 'var(--accent)' }}>{Math.round(Math.max(prediction.winProbA, 1 - prediction.winProbA) * 100)}%</div><div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 6 }}>{prediction.winProbA >= 0.5 ? teamAName : teamBName}{prediction.mlValue && <span style={{ color: 'var(--green)', marginLeft: 6, fontWeight: 700 }}>★ ML VALUE</span>}</div></div>
-            </div>
-            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 16 }}><span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1.5, whiteSpace: 'nowrap' }}>CONFIDENCE</span><div style={{ flex: 1 }}><StatBar value={prediction.confidence} max={100} color={prediction.confidence > 70 ? 'var(--green)' : prediction.confidence > 50 ? 'var(--amber)' : 'var(--red)'} /></div><span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 700 }}>{prediction.confidence}%</span></div>
-            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '16px 20px', marginBottom: 20 }}>
-              <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1.5, marginBottom: 14 }}>HEAD-TO-HEAD STAT COMPARISON</div>
-              {[
-                { label: 'Face-Off Win %', a: teamA.foWin, b: teamB.foWin, fmt: (v: number) => (v * 100).toFixed(1) + '%' },
-                { label: 'Shot %', a: teamA.shotPct, b: teamB.shotPct, fmt: (v: number) => (v * 100).toFixed(1) + '%' },
-                { label: 'Save %', a: teamA.savePct, b: teamB.savePct, fmt: (v: number) => (v * 100).toFixed(1) + '%' },
-                { label: 'TO Margin', a: teamA.causedTurnoversPerGame - teamA.turnoversPerGame, b: teamB.causedTurnoversPerGame - teamB.turnoversPerGame, fmt: (v: number) => (v > 0 ? '+' : '') + v.toFixed(1) },
-                { label: 'Scoring Off', a: teamA.scoringOff, b: teamB.scoringOff, fmt: (v: number) => v.toFixed(1) },
-                { label: 'Scoring Def', a: teamA.scoringDef, b: teamB.scoringDef, fmt: (v: number) => v.toFixed(1), invert: true },
-                { label: 'Clear %', a: teamA.clearPct, b: teamB.clearPct, fmt: (v: number) => (v * 100).toFixed(1) + '%' },
-                { label: 'Power Rating', a: prediction.ratingA, b: prediction.ratingB, fmt: (v: number) => v.toFixed(1) },
-              ].map((row, i) => {
-                const aWins = row.invert ? row.a < row.b : row.a > row.b;
-                const bWins = row.invert ? row.b < row.a : row.b > row.a;
-                return (<div key={i} style={{ display: 'grid', gridTemplateColumns: '80px 1fr 110px 1fr 80px', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                  <span style={{ textAlign: 'right', fontSize: 13, fontFamily: 'var(--font-mono)', fontWeight: 700, color: aWins ? 'var(--green)' : 'var(--text-dim)' }}>{row.fmt(row.a)}</span>
-                  <div style={{ height: 4, borderRadius: 2, background: aWins ? 'var(--green)' : 'var(--bar-bg)', opacity: aWins ? 0.6 : 0.3 }} />
-                  <span style={{ textAlign: 'center', fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{row.label}</span>
-                  <div style={{ height: 4, borderRadius: 2, background: bWins ? 'var(--green)' : 'var(--bar-bg)', opacity: bWins ? 0.6 : 0.3 }} />
-                  <span style={{ textAlign: 'left', fontSize: 13, fontFamily: 'var(--font-mono)', fontWeight: 700, color: bWins ? 'var(--green)' : 'var(--text-dim)' }}>{row.fmt(row.b)}</span>
-                </div>);
-              })}
-            </div>
-          </>)}
-          <button onClick={() => setShowWeights(!showWeights)} style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 16px', width: '100%', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: 11, cursor: 'pointer', letterSpacing: 1 }}>{showWeights ? '▾ HIDE' : '▸ SHOW'} MODEL WEIGHTS</button>
-          {showWeights && (<div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '16px 20px', marginTop: 12 }}>
-            <WeightSlider label="Face-Off %" value={weights.faceOff} onChange={v => updateWeight('faceOff', v)} accent="var(--accent)" />
-            <WeightSlider label="Clear %" value={weights.clearPct} onChange={v => updateWeight('clearPct', v)} accent="#81d4fa" />
-            <WeightSlider label="Shot %" value={weights.shotPct} onChange={v => updateWeight('shotPct', v)} accent="var(--green)" />
-            <WeightSlider label="TO Margin" value={weights.turnoverMargin} onChange={v => updateWeight('turnoverMargin', v)} accent="var(--amber)" />
-            <WeightSlider label="Save %" value={weights.savePct} onChange={v => updateWeight('savePct', v)} accent="var(--red)" />
-            <WeightSlider label="Def Eff" value={weights.defEff} onChange={v => updateWeight('defEff', v)} accent="#80cbc4" />
-            <WeightSlider label="EMO" value={weights.emo} onChange={v => updateWeight('emo', v)} accent="#ce93d8" />
-            <button onClick={() => setWeights(DEFAULT_WEIGHTS)} style={{ marginTop: 8, padding: '6px 14px', background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 5, color: 'var(--text-dim)', fontSize: 11, fontFamily: 'var(--font-mono)', cursor: 'pointer' }}>RESET DEFAULTS</button>
-          </div>)}
-        </div>)}
+        )}
 
-        {activeTab === 'rankings' && (<div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 16 }}><div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1.5 }}>USA LACROSSE DI MEN'S TOP 20</div><div style={{ fontSize: 10, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>{rankingsWeek || 'Loading...'}</div></div>
-          {rankings.length === 0 ? (<div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '40px 20px', textAlign: 'center' }}><div style={{ fontSize: 14, color: 'var(--text-dim)' }}>Rankings not yet loaded</div></div>) : (<>
-            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '45px 1fr 70px 50px', padding: '10px 16px', borderBottom: '1px solid var(--border)', fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', letterSpacing: 1.2 }}><span>RANK</span><span>TEAM</span><span style={{ textAlign: 'center' }}>RECORD</span><span style={{ textAlign: 'center' }}>PREV</span></div>
-              {rankings.map((r, i) => { const prevNum = parseInt(r.prev); const moved = isNaN(prevNum) ? 'new' : prevNum > r.rank ? 'up' : prevNum < r.rank ? 'down' : 'same'; return (<div key={r.rank} style={{ display: 'grid', gridTemplateColumns: '45px 1fr 70px 50px', padding: '11px 16px', borderBottom: i < rankings.length - 1 ? '1px solid var(--border)' : 'none', background: i % 2 === 0 ? 'transparent' : 'var(--surface-2)', alignItems: 'center' }}>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 700, color: r.rank <= 5 ? 'var(--accent)' : 'var(--text-dim)' }}>{r.rank}</span>
-                <span style={{ fontWeight: 700, fontSize: 14 }}>{r.team}</span>
-                <span style={{ textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-dim)' }}>{r.record}</span>
-                <span style={{ textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: 11, color: moved === 'up' ? 'var(--green)' : moved === 'down' ? 'var(--red)' : moved === 'new' ? 'var(--accent)' : 'var(--text-muted)' }}>{moved === 'up' ? `▲${prevNum - r.rank}` : moved === 'down' ? `▼${r.rank - prevNum}` : moved === 'new' ? 'NR' : '–'}</span>
-              </div>); })}
+        {/* ═══ RANKINGS ═══ */}
+        {activeTab === 'rankings' && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 16 }}>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1.5 }}>USA LACROSSE DI MEN'S TOP 20</div>
+              <div style={{ fontSize: 10, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>{rankingsWeek || 'Loading...'}</div>
             </div>
-            {alsoConsidered.length > 0 && (<div style={{ marginTop: 16, padding: '12px 16px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10 }}><div style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1.2, marginBottom: 8 }}>ALSO CONSIDERED</div><div style={{ fontSize: 13, color: 'var(--text-dim)' }}>{alsoConsidered.join(' · ')}</div></div>)}
-            <div style={{ marginTop: 12, fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', lineHeight: 1.6 }}>Rankings compiled by USA Lacrosse Magazine staff and contributors with input from coaches.</div>
-          </>)}
-        </div>)}
+            {rankings.length === 0 ? (
+              <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '40px 20px', textAlign: 'center' }}>
+                <div style={{ fontSize: 14, color: 'var(--text-dim)' }}>Rankings not yet loaded</div>
+              </div>
+            ) : (
+              <>
+                <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '45px 1fr 70px 50px', padding: '10px 16px', borderBottom: '1px solid var(--border)', fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', letterSpacing: 1.2 }}>
+                    <span>RANK</span><span>TEAM</span><span style={{ textAlign: 'center' }}>RECORD</span><span style={{ textAlign: 'center' }}>PREV</span>
+                  </div>
+                  {rankings.map((r, i) => {
+                    const prevNum = parseInt(r.prev);
+                    const moved = isNaN(prevNum) ? 'new' : prevNum > r.rank ? 'up' : prevNum < r.rank ? 'down' : 'same';
+                    return (
+                      <div key={r.rank} style={{
+                        display: 'grid', gridTemplateColumns: '45px 1fr 70px 50px', padding: '11px 16px',
+                        borderBottom: i < rankings.length - 1 ? '1px solid var(--border)' : 'none',
+                        background: i % 2 === 0 ? 'transparent' : 'var(--surface-2)', alignItems: 'center',
+                      }}>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 700, color: r.rank <= 5 ? 'var(--accent)' : 'var(--text-dim)' }}>{r.rank}</span>
+                        <span style={{ fontWeight: 700, fontSize: 14 }}>{r.team}</span>
+                        <span style={{ textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-dim)' }}>{r.record}</span>
+                        <span style={{ textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: 11, color: moved === 'up' ? 'var(--green)' : moved === 'down' ? 'var(--red)' : moved === 'new' ? 'var(--accent)' : 'var(--text-muted)' }}>
+                          {moved === 'up' ? `▲${prevNum - r.rank}` : moved === 'down' ? `▼${r.rank - prevNum}` : moved === 'new' ? 'NR' : '–'}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+                {alsoConsidered.length > 0 && (
+                  <div style={{ marginTop: 16, padding: '12px 16px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10 }}>
+                    <div style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1.2, marginBottom: 8 }}>ALSO CONSIDERED</div>
+                    <div style={{ fontSize: 13, color: 'var(--text-dim)' }}>{alsoConsidered.join(' · ')}</div>
+                  </div>
+                )}
+                <div style={{ marginTop: 12, fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', lineHeight: 1.6 }}>
+                  Rankings compiled by USA Lacrosse Magazine staff and contributors with input from coaches.
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
-        <div style={{ marginTop: 32, padding: '16px 0', borderTop: '1px solid var(--border)', fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', textAlign: 'center', letterSpacing: 0.5, lineHeight: 1.8 }}>LAX EDGE v3.0 — NCAA D1 Men's Lacrosse<br />Not financial advice. Bet responsibly.</div>
+        {/* ─── FOOTER DISCLAIMER ─── */}
+        <div style={{ marginTop: 32, padding: '16px 0', borderTop: '1px solid var(--border)', textAlign: 'center' }}>
+          <div style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', lineHeight: 1.8, maxWidth: 600, margin: '0 auto', letterSpacing: 0.3 }}>
+            {FOOTER_DISCLAIMER}
+          </div>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: 12, letterSpacing: 0.5 }}>
+            LAX EDGE v3.0
+          </div>
+        </div>
       </div>
     </div>
   );
