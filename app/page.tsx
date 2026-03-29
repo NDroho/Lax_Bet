@@ -131,6 +131,35 @@ export default function Dashboard() {
   const prediction = useMemo(() => teamA && teamB ? predictMatchup(teamA, teamB, weights) : null, [teamA, teamB, weights]);
   const updateWeight = useCallback((key: string, val: number) => setWeights(prev => ({ ...prev, [key]: val })), []);
 
+  // Match ESPN team names to stats team names (fuzzy match)
+  const findTeamName = useCallback((espnName: string): string | null => {
+    if (!espnName) return null;
+    const lower = espnName.toLowerCase();
+    // Exact match
+    const exact = teams.find(t => t.name.toLowerCase() === lower);
+    if (exact) return exact.name;
+    // ESPN uses full names like "Johns Hopkins University Blue Jays" — try partial matching
+    const partial = teams.find(t =>
+      lower.includes(t.name.toLowerCase()) || t.name.toLowerCase().includes(lower)
+    );
+    if (partial) return partial.name;
+    // Try matching just the school name (first part before common suffixes)
+    const cleaned = lower.replace(/(university|college|institute|state|st\.)?\s*(blue jays|scarlet knights|tar heels|orange|cavaliers|fighting irish|big green|terriers|crimson|hoyas|pioneers|retrievers|bulldogs|bears|tigers|lions|eagles|hawks|cardinals|wildcats|wolverines|aggies|huskies|panthers|rams|red storm|wolfpack|demon deacons|yellow jackets)?\s*$/i, '').trim();
+    if (cleaned) {
+      const cleanMatch = teams.find(t => t.name.toLowerCase().includes(cleaned) || cleaned.includes(t.name.toLowerCase()));
+      if (cleanMatch) return cleanMatch.name;
+    }
+    return null;
+  }, [teams]);
+
+  function handleSlateClick(awayEspn: string, homeEspn: string) {
+    const matchA = findTeamName(awayEspn);
+    const matchB = findTeamName(homeEspn);
+    if (matchA) setTeamAName(matchA);
+    if (matchB) setTeamBName(matchB);
+    setActiveTab('predict');
+  }
+
   if (loading) return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>Loading LAX EDGE...</div>;
 
   const tabs = [{ key: 'slate', label: "TODAY'S SLATE" }, { key: 'predict', label: 'PREDICTOR' }, { key: 'rankings', label: 'RANKINGS' }];
@@ -180,14 +209,18 @@ export default function Dashboard() {
             {schedule.length > 0 && (
               <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', padding: '10px 20px', borderBottom: '1px solid var(--border)', fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', letterSpacing: 1.2 }}>
-                  <span>MATCHUP</span><span>TIME</span>
+                  <span>MATCHUP <span style={{ color: 'var(--accent)', marginLeft: 8, letterSpacing: 0.5 }}>click to analyze</span></span><span>TIME</span>
                 </div>
                 {schedule.map((g, i) => (
-                  <div key={i} style={{
+                  <div key={i} onClick={() => handleSlateClick(g.away, g.home)} style={{
                     display: 'grid', gridTemplateColumns: '1fr auto', padding: '12px 20px',
                     borderBottom: i < schedule.length - 1 ? '1px solid var(--border)' : 'none',
                     background: i % 2 === 0 ? 'transparent' : 'var(--surface-2)', alignItems: 'center',
-                  }}>
+                    cursor: 'pointer', transition: 'background 0.15s',
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-3)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : 'var(--surface-2)')}
+                  >
                     <div>
                       <span style={{ fontWeight: 700, fontSize: 14 }}>{g.away}</span>
                       <span style={{ color: 'var(--text-muted)', margin: '0 8px', fontSize: 12 }}>at</span>
