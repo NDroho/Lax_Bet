@@ -1,18 +1,37 @@
 import { NextResponse } from 'next/server';
-import { kv } from '@vercel/kv';
+
+interface GameEntry {
+  away: string;
+  home: string;
+  date: string;
+  time: string;
+  tv: string;
+  note: string;
+}
 
 export async function GET() {
   try {
-    const [games, updated] = await Promise.all([
-      kv.get('schedule_data'),
-      kv.get('schedule_data_updated'),
-    ]);
+    const today = new Date();
+    const espnDate = today.toISOString().split('T')[0].replace(/-/g, '');
+    const url = `https://site.api.espn.com/apis/site/v2/sports/lacrosse/mens-college-lacrosse/scoreboard?dates=${espnDate}`;
 
-    return NextResponse.json({
-      games: Array.isArray(games) ? games : [],
-      updated: updated || null,
+    const res = await fetch(url, {
+      headers: { 'Accept': 'application/json' },
+      next: { revalidate: 300 },
     });
-  } catch (error: any) {
-    return NextResponse.json({ games: [], updated: null });
-  }
-}
+
+    if (!res.ok) {
+      return NextResponse.json({ games: [], updated: null });
+    }
+
+    const data = await res.json();
+    const games: GameEntry[] = [];
+
+    for (const event of data.events || []) {
+      const competition = event.competitions?.[0];
+      if (!competition) continue;
+
+      let away = '', home = '';
+      for (const competitor of competition.competitors || []) {
+        const teamName = competitor.team?.displayName || competitor.team?.shortDisplayName || competitor.team?.name || '';
+        if (competitor.homeAway ===
