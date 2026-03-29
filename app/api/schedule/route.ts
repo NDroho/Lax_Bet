@@ -1,22 +1,13 @@
 import { NextResponse } from 'next/server';
 
-interface GameEntry {
-  away: string;
-  home: string;
-  date: string;
-  time: string;
-  tv: string;
-  note: string;
-}
-
 export async function GET() {
   try {
     const today = new Date();
     const espnDate = today.toISOString().split('T')[0].replace(/-/g, '');
-    const url = `https://site.api.espn.com/apis/site/v2/sports/lacrosse/mens-college-lacrosse/scoreboard?dates=${espnDate}`;
+    const url = 'https://site.api.espn.com/apis/site/v2/sports/lacrosse/mens-college-lacrosse/scoreboard?dates=' + espnDate;
 
     const res = await fetch(url, {
-      headers: { 'Accept': 'application/json' },
+      headers: { Accept: 'application/json' },
       next: { revalidate: 300 },
     });
 
@@ -25,13 +16,42 @@ export async function GET() {
     }
 
     const data = await res.json();
-    const games: GameEntry[] = [];
+    const games: { away: string; home: string; date: string; time: string; tv: string; note: string }[] = [];
 
     for (const event of data.events || []) {
-      const competition = event.competitions?.[0];
-      if (!competition) continue;
+      const comp = event.competitions?.[0];
+      if (!comp) continue;
 
-      let away = '', home = '';
-      for (const competitor of competition.competitors || []) {
-        const teamName = competitor.team?.displayName || competitor.team?.shortDisplayName || competitor.team?.name || '';
-        if (competitor.homeAway ===
+      let away = '';
+      let home = '';
+      for (const c of comp.competitors || []) {
+        const name = c.team?.displayName || c.team?.shortDisplayName || c.team?.name || '';
+        if (c.homeAway === 'away') away = name;
+        if (c.homeAway === 'home') home = name;
+      }
+
+      let time = 'TBD';
+      if (event.date) {
+        try {
+          const d = new Date(event.date);
+          time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/New_York' });
+        } catch (e) {
+          time = 'TBD';
+        }
+      }
+      const status = event.status?.type?.description || '';
+      if (status === 'Final') time = 'Final';
+      if (status === 'In Progress') time = 'Live';
+
+      const tv = comp.broadcasts?.[0]?.names?.[0] || '';
+
+      if (away && home) {
+        games.push({ away, home, date: today.toISOString().split('T')[0], time, tv, note: '' });
+      }
+    }
+
+    return NextResponse.json({ games, updated: new Date().toISOString() });
+  } catch (err) {
+    return NextResponse.json({ games: [], updated: null });
+  }
+}
