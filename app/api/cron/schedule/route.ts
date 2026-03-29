@@ -1,91 +1,100 @@
 import { NextResponse } from 'next/server';
-import * as cheerio from 'cheerio';
 import { kv } from '@vercel/kv';
 
 interface GameEntry {
-  away: string; home: string; date: string; time: string; tv: string; note: string;
+  away: string;
+  home: string;
+  date: string;
+  time: string;
+  tv: string;
+  note: string;
 }
 
-async function scrapeESPN(): Promise<GameEntry[]> {
-  const today = new Date();
-  const dateStr = today.toISOString().split('T')[0].replace(/-/g, '');
-  const url = `https://www.espn.com/mens-college-lacrosse/scoreboard/_/date/${dateStr}`;
+async function fetchESPN(dateStr: string): Promise<GameEntry[]> {
+  const espnDate = dateStr.replace(/-/g, '');
+  const slugs = ['mens-college-lacrosse', 'college-lacrosse'];
 
-  try {
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      },
-      next: { revalidate: 0 },
-    });
-    if (!res.ok) throw new Error(`ESPN HTTP ${res.status}`);
+  for (const slug of slugs) {
+    const url = `https://site.api.espn.com/apis/site/v2/sports/lacrosse/${slug}/scoreboard?dates=${espnDate}`;
+    try {
+      const res = await fetch(url, {
+        headers: { 'Accept': 'application/json' },
+        next: { revalidate: 0 },
+      });
+      if (!res.ok) continue;
 
-    const html = await res.text();
-    const $ = cheerio.load(html);
-    const games: GameEntry[] = [];
+      const data = await res.json();
+      if (!data.events || data.events.length === 0) continue;
 
-    // ESPN pairs team names within game containers
-    const teamNames: string[] = [];
-    $('[class*="TeamName"], [class*="team-name"], .ScoreboardScoreCell__Item').each((_, el) => {
-      const name = $(el).text().trim();
-      if (name && name.length > 1 && name.length < 40) teamNames.push(name);
-    });
-    for (let i = 0; i < teamNames.length - 1; i += 2) {
-      games.push({ away: teamNames[i], home: teamNames[i + 1], date: today.toLocaleDateString(), time: 'TBD', tv: '', note: '' });
-    }
+      const games: GameEntry[] = [];
+      for (const event of data.events) {
+        const competition = event.competitions?.[0];
+        if (!competition) continue;
 
-    // Fallback: parse "(record)" pattern from text
-    if (games.length === 0) {
-      const bodyText = $('body').text();
-      const teamMatches = bodyText.match(/([A-Z][a-zA-Z\s.&'-]{2,25}?)\s+\(\d+-\d+\)/g);
-      if (teamMatches && teamMatches.length >= 2) {
-        for (let i = 0; i < teamMatches.length - 1; i += 2) {
-          const away = teamMatches[i].replace(/\s*\(\d+-\d+\)/, '').trim();
-          const home = teamMatches[i + 1].replace(/\s*\(\d+-\d+\)/, '').trim();
-          if (away && home) games.push({ away, home, date: today.toLocaleDateString(), time: 'TBD', tv: '', note: '' });
+        let away = '', home = '';
+        for (const competitor of competition.competitors || []) {
+          const teamName = competitor.team?.displayName || competitor.team?.shortDisplayName || competitor.team?.name || '';
+          if (competitor.homeAway === 'away') away = teamName;
+          else if (competitor.homeAway === 'home') home = teamName;
+        }
+
+        let time = 'TBD';
+        if (event.date) {
+          try {
+            const d = new Date(event.date);
+            time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/New_York' });
+          } catch {}
+        }
+        if (event.status?.type?.description === 'Final') time = 'Final';
+        if (event.status?.type?.description === 'In Progress') time = 'Live';
+
+        const tv = competition.broadcasts?.[0]?.names?.[0] || '';
+        const venue = competition.venue?.fullName || '';
+
+        if (away && home) {
+          games.push({ away, home, date: dateStr, time, tv, note: venue });
         }
       }
-    }
 
-    console.log(`ESPN: found ${games.length} games`);
-    return games;
-  } catch (err: any) {
-    console.error('ESPN scrape failed:', err.message);
-    return [];
+      console.log(`ESPN (${slug}): found ${games.length} games`);
+      return games;
+    } catch (err: any) {
+      console.error(`ESPN (${slug}) error:`, err.message);
+    }
   }
+  return [];
 }
 
-async function scrapeInsideLacrosse(): Promise<GameEntry[]> {
-  const today = new Date();
-  const dateStr = today.toISOString().split('T')[0];
-  const url = `https://www.insidelacrosse.com/ncaa/m/1/2026/scores?date=${dateStr}&autoload=1`;
+async function fetchNCAA(dateStr: string): Promise<GameEntry[]> {
+  const [year, month, day] = dateStr.split('-');
+  const url = `https://data.ncaa.com/casablanca/scoreboard/lacrosse-men/d1/${year}/${month}/${day}/scoreboard.json`;
 
   try {
     const res = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      },
+      headers: { 'Accept': 'application/json' },
       next: { revalidate: 0 },
     });
-    if (!res.ok) throw new Error(`IL HTTP ${res.status}`);
+    if (!res.ok) return [];
 
-    const html = await res.text();
-    const $ = cheerio.load(html);
+    const data = await res.json();
     const games: GameEntry[] = [];
 
-    $('[class*="game"], [class*="matchup"], [class*="score"], tr').each((_, el) => {
-      const text = $(el).text();
-      const vsMatch = text.match(/([A-Z][A-Za-z\s.&'-]+?)\s+(?:vs\.?|at|@|v)\s+([A-Z][A-Za-z\s.&'-]+)/);
-      if (vsMatch) {
-        const timeMatch = text.match(/(\d{1,2}:\d{2}\s*(?:AM|PM))/i);
-        games.push({ away: vsMatch[1].trim(), home: vsMatch[2].trim(), date: today.toLocaleDateString(), time: timeMatch ? timeMatch[1] : 'TBD', tv: '', note: '' });
-      }
-    });
+    for (const game of data.games || []) {
+      const g = game.game || game;
+      const away = g.away?.names?.short || g.away?.names?.full6Char || g.away?.school?.name || '';
+      const home = g.home?.names?.short || g.home?.names?.full6Char || g.home?.school?.name || '';
+      const time = g.startTime || 'TBD';
+      const network = g.network || '';
 
-    console.log(`InsideLacrosse: found ${games.length} games`);
+      if (away && home) {
+        games.push({ away, home, date: dateStr, time, tv: network, note: '' });
+      }
+    }
+
+    console.log(`NCAA API: found ${games.length} games`);
     return games;
   } catch (err: any) {
-    console.error('InsideLacrosse scrape failed:', err.message);
+    console.error('NCAA API error:', err.message);
     return [];
   }
 }
@@ -97,12 +106,15 @@ export async function GET(request: Request) {
   }
 
   try {
-    let games = await scrapeESPN();
-    let source = 'espn';
+    const today = new Date();
+    const dateStr = today.toISOString().split('T')[0];
+
+    let games = await fetchESPN(dateStr);
+    let source = 'espn-api';
 
     if (games.length === 0) {
-      games = await scrapeInsideLacrosse();
-      source = 'insidelacrosse';
+      games = await fetchNCAA(dateStr);
+      source = 'ncaa-api';
     }
 
     const seen = new Set<string>();
@@ -116,7 +128,14 @@ export async function GET(request: Request) {
     await kv.set('schedule', JSON.stringify(unique));
     await kv.set('schedule_updated', new Date().toISOString());
 
-    return NextResponse.json({ success: true, gamesCount: unique.length, source, updatedAt: new Date().toISOString() });
+    return NextResponse.json({
+      success: true,
+      gamesCount: unique.length,
+      source,
+      date: dateStr,
+      sampleGames: unique.slice(0, 3),
+      updatedAt: new Date().toISOString(),
+    });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
