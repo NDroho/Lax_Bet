@@ -112,8 +112,8 @@ export async function GET(request: Request) {
         };
       });
 
-    await kv.set('teams', JSON.stringify(teams));
-    await kv.set('teams_updated', new Date().toISOString());
+    await kv.set('teams_data', teams);
+    await kv.set('teams_data_updated', new Date().toISOString());
 
     return NextResponse.json({
       success: true,
