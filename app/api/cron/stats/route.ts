@@ -56,11 +56,11 @@ async function fetchStatPage(url: string, pctField: boolean): Promise<Record<str
 
 async function fetchStat(statId: string, pctField: boolean = false): Promise<Record<string, number>> {
   const base = `https://www.ncaa.com/stats/lacrosse-men/d1/current/team/${statId}`;
-  const page1 = await fetchStatPage(base, pctField);
-  await new Promise(r => setTimeout(r, 500));
-  const page2 = await fetchStatPage(`${base}/p2`, pctField);
-  const merged = { ...page2, ...page1 };
-  return merged;
+  const [page1, page2] = await Promise.all([
+    fetchStatPage(base, pctField),
+    fetchStatPage(`${base}/p2`, pctField),
+  ]);
+  return { ...page2, ...page1 };
 }
 
 export async function GET(request: Request) {
@@ -80,7 +80,7 @@ export async function GET(request: Request) {
         if (!allStats[team]) allStats[team] = {};
         allStats[team][stat.key] = val;
       }
-      await new Promise(r => setTimeout(r, 1000));
+      await new Promise(r => setTimeout(r, 500));
     }
 
     const teams = Object.entries(allStats)
