@@ -2,8 +2,15 @@ import { NextResponse } from 'next/server';
 
 export async function GET() {
   try {
-    const today = new Date();
-    const espnDate = today.toISOString().split('T')[0].replace(/-/g, '');
+    // Use Eastern time so the date matches the actual lacrosse game day
+    const now = new Date();
+    const eastern = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    const year = eastern.getFullYear();
+    const month = String(eastern.getMonth() + 1).padStart(2, '0');
+    const day = String(eastern.getDate()).padStart(2, '0');
+    const espnDate = `${year}${month}${day}`;
+    const dateStr = `${year}-${month}-${day}`;
+
     const url = 'https://site.api.espn.com/apis/site/v2/sports/lacrosse/mens-college-lacrosse/scoreboard?dates=' + espnDate;
 
     const res = await fetch(url, {
@@ -46,7 +53,7 @@ export async function GET() {
       const tv = comp.broadcasts?.[0]?.names?.[0] || '';
 
       if (away && home) {
-        games.push({ away, home, date: today.toISOString().split('T')[0], time, tv, note: '' });
+        games.push({ away, home, date: dateStr, time, tv, note: '' });
       }
     }
 
