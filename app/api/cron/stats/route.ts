@@ -60,7 +60,6 @@ async function fetchStat(statId: string, pctField: boolean = false): Promise<Rec
   await new Promise(r => setTimeout(r, 500));
   const page2 = await fetchStatPage(`${base}/p2`, pctField);
   const merged = { ...page2, ...page1 };
-  console.log(`Stat ${statId}: p1=${Object.keys(page1).length} p2=${Object.keys(page2).length} total=${Object.keys(merged).length}`);
   return merged;
 }
 
@@ -112,8 +111,8 @@ export async function GET(request: Request) {
         };
       });
 
-    await kv.set('teams_data', teams);
-    await kv.set('teams_data_updated', new Date().toISOString());
+    await kv.set('teams', JSON.stringify(teams));
+    await kv.set('teams_updated', new Date().toISOString());
 
     return NextResponse.json({
       success: true,
