@@ -3,15 +3,12 @@ import { kv } from '@vercel/kv';
 
 export async function GET() {
   try {
-    const [teams, updated] = await Promise.all([
-      kv.get('teams_data'),
-      kv.get('teams_data_updated'),
+    const [teamsRaw, updated] = await Promise.all([
+      kv.get('teams'),
+      kv.get('teams_updated'),
     ]);
-
-    return NextResponse.json({
-      teams: Array.isArray(teams) ? teams : [],
-      updated: updated || null,
-    });
+    const teams = teamsRaw ? (typeof teamsRaw === 'string' ? JSON.parse(teamsRaw) : teamsRaw) : [];
+    return NextResponse.json({ teams, updated: updated || null });
   } catch (error: any) {
     return NextResponse.json({ teams: [], updated: null });
   }
