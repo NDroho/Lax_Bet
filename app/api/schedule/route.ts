@@ -2,23 +2,35 @@ import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    // Use Eastern time so the date matches the actual lacrosse game day
-    const now = new Date();
-    const eastern = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-    const year = eastern.getFullYear();
-    const month = String(eastern.getMonth() + 1).padStart(2, '0');
-    const day = String(eastern.getDate()).padStart(2, '0');
-    const espnDate = `${year}${month}${day}`;
-    const dateStr = `${year}-${month}-${day}`;
+    const { searchParams } = new URL(request.url);
+    const dateParam = searchParams.get('date'); // expects YYYYMMDD
+
+    let espnDate: string;
+    let dateStr: string;
+
+    if (dateParam && /^\d{8}$/.test(dateParam)) {
+      espnDate = dateParam;
+      dateStr = `${dateParam.slice(0, 4)}-${dateParam.slice(4, 6)}-${dateParam.slice(6, 8)}`;
+    } else {
+      // Default: today in Eastern time
+      const now = new Date();
+      const eastern = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+      const year = eastern.getFullYear();
+      const month = String(eastern.getMonth() + 1).padStart(2, '0');
+      const day = String(eastern.getDate()).padStart(2, '0');
+      espnDate = `${year}${month}${day}`;
+      dateStr = `${year}-${month}-${day}`;
+    }
+
     const url = 'https://site.api.espn.com/apis/site/v2/sports/lacrosse/mens-college-lacrosse/scoreboard?dates=' + espnDate;
     const res = await fetch(url, {
       headers: { Accept: 'application/json' },
       next: { revalidate: 0 },
     });
     if (!res.ok) {
-      return NextResponse.json({ games: [], updated: null });
+      return NextResponse.json({ games: [], date: dateStr, updated: null });
     }
     const data = await res.json();
     const games: { away: string; home: string; date: string; time: string; tv: string; note: string }[] = [];
@@ -49,8 +61,8 @@ export async function GET() {
         games.push({ away, home, date: dateStr, time, tv, note: '' });
       }
     }
-    return NextResponse.json({ games, updated: new Date().toISOString() });
+    return NextResponse.json({ games, date: dateStr, updated: new Date().toISOString() });
   } catch (err) {
-    return NextResponse.json({ games: [], updated: null });
+    return NextResponse.json({ games: [], date: '', updated: null });
   }
 }
