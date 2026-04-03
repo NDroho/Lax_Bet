@@ -123,3 +123,28 @@ export function predictMatchup(teamA: TeamStats, teamB: TeamStats, weights: Mode
 
   return { ratingA, ratingB, spread, winProbA, projTotal, confidence, mlValue };
 }
+
+// ─── AMERICAN ODDS CONVERSION ───
+
+export function probToAmericanOdds(prob: number): string {
+  if (prob <= 0 || prob >= 1) return 'N/A';
+  // Clamp to avoid extreme odds
+  const p = Math.max(0.03, Math.min(0.97, prob));
+  if (p >= 0.5) {
+    // Favorite: negative odds
+    const odds = Math.round(-(p / (1 - p)) * 100);
+    return `${odds}`;
+  } else {
+    // Underdog: positive odds
+    const odds = Math.round(((1 - p) / p) * 100);
+    return `+${odds}`;
+  }
+}
+
+export type ConfidenceTier = 'STRONG' | 'LEAN' | 'TOSS-UP';
+
+export function getConfidenceTier(confidence: number): ConfidenceTier {
+  if (confidence >= 70) return 'STRONG';
+  if (confidence >= 50) return 'LEAN';
+  return 'TOSS-UP';
+}
