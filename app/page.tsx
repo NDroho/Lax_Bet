@@ -298,31 +298,48 @@ export default function Dashboard() {
   const updateWeight = useCallback((key: string, val: number) => setWeights(prev => ({ ...prev, [key]: val })), []);
 
   // Match ESPN team names to stats team names (fuzzy match)
-  // Uses longest-match-wins to avoid "Loyola Maryland" matching "Maryland"
+  // Uses manual aliases + longest-match-wins for edge cases
   const findTeamName = useCallback((espnName: string): string | null => {
     if (!espnName) return null;
     const lower = espnName.toLowerCase();
+
+    // 0. Manual alias map — checked FIRST for known ESPN ↔ KV mismatches
+    const ALIASES: [string, string][] = [
+      ['army', 'Army West Point'],
+      ['cleveland state', 'Cleveland St.'],
+      ['queens university', 'Queens (NC)'],
+      ['long island university', 'LIU'],
+      ['long island', 'LIU'],
+      ['umass lowell', 'UMass Lowell'],
+      ['mount st. mary', "Mount St. Mary's"],
+      ['saint joseph', "Saint Joseph's"],
+      ['st. bonaventure', 'St. Bonaventure'],
+    ];
+    // Check longest alias keys first so "umass lowell" beats "umass"
+    const sortedAliases = [...ALIASES].sort((a, b) => b[0].length - a[0].length);
+    for (const [alias, kvName] of sortedAliases) {
+      if (lower.includes(alias)) {
+        const match = teams.find(t => t.name === kvName);
+        if (match) return match.name;
+      }
+    }
 
     // 1. Exact match
     const exact = teams.find(t => t.name.toLowerCase() === lower);
     if (exact) return exact.name;
 
-    // Helper: normalize abbreviations for comparison
+    // Helper: normalize State/St., University/U. to common forms
     function norm(s: string): string {
       return s.toLowerCase()
         .replace(/\bu\.\s*/g, 'university ')
-        .replace(/\bst\.\s*/g, 'saint ')
-        .replace(/\bumass\b/g, 'massachusetts')
-        .replace(/\buconn\b/g, 'connecticut')
-        .replace(/\bliu\b/g, 'long island')
-        .replace(/\bnjit\b/g, 'njit')
-        .replace(/\bumbc\b/g, 'umbc')
+        .replace(/\bstate\b/g, 'st')
+        .replace(/\bst\.\s*/g, 'st ')
         .trim();
     }
 
-    // Strip common mascot names from ESPN full names to get school name
+    // Strip mascot names from ESPN full names
     function stripMascot(s: string): string {
-      return s.replace(/\s+(blue jays|scarlet knights|tar heels|orange|orangemen|cavaliers|fighting irish|big green|terriers|crimson|hoyas|pioneers|retrievers|bulldogs|bears|tigers|lions|eagles|hawks|cardinals|wildcats|wolverines|aggies|huskies|panthers|rams|red storm|wolfpack|demon deacons|yellow jackets|greyhounds|jaspers|warriors|seahawks|vikings|colonials|keydets|bobcats|royals|dolphins|sharks|lakers|river hawks|titans|falcons|knights|golden eagles|statesmen|blue hens|red foxes|seawolves|bonnies|gaels|golden griffins|stags|pride|crusaders|midshipmen|big red|quakers|minutemen|buckeyes|terrapins|catamounts|spiders|saints|great danes|raiders|leopards|bearcats|mounties|mountaineers)$/i, '').trim();
+      return s.replace(/\s+(black knights|blue jays|scarlet knights|tar heels|orange|orangemen|cavaliers|fighting irish|big green|terriers|crimson|hoyas|pioneers|retrievers|bulldogs|bears|tigers|lions|eagles|hawks|cardinals|wildcats|wolverines|aggies|huskies|panthers|rams|red storm|wolfpack|demon deacons|yellow jackets|greyhounds|jaspers|warriors|seahawks|vikings|colonials|keydets|bobcats|royals|dolphins|sharks|lakers|river hawks|titans|falcons|knights|golden eagles|statesmen|blue hens|red foxes|seawolves|bonnies|gaels|golden griffins|stags|pride|crusaders|midshipmen|big red|quakers|minutemen|buckeyes|terrapins|catamounts|spiders|saints|great danes|raiders|leopards|bearcats|mounties|mountaineers|highlanders|bison|pirates|utes|dragons|nittany lions)$/i, '').trim();
     }
 
     const espnNorm = norm(lower);
@@ -331,8 +348,14 @@ export default function Dashboard() {
     // 2. Find ALL partial matches and pick the longest (most specific)
     function bestMatch(candidates: { team: TeamStats; score: number }[]): string | null {
       if (candidates.length === 0) return null;
-      candidates.sort((a, b) => b.score - a.score);
-      return candidates[0].team.name;
+      // Deduplicate by team name, keeping highest score
+      const best = new Map<string, { team: TeamStats; score: number }>();
+      for (const c of candidates) {
+        const existing = best.get(c.team.name);
+        if (!existing || c.score > existing.score) best.set(c.team.name, c);
+      }
+      const sorted = [...best.values()].sort((a, b) => b.score - a.score);
+      return sorted[0].team.name;
     }
 
     // Try normalized substring matching — prefer longest team name match
@@ -346,14 +369,13 @@ export default function Dashboard() {
     const subResult = bestMatch(substringMatches);
     if (subResult) return subResult;
 
-    // 3. Try matching with mascots stripped
+    // 3. Try matching with mascots stripped on both sides
     const schoolMatches: { team: TeamStats; score: number }[] = [];
     for (const t of teams) {
       const tn = norm(t.name.toLowerCase());
       if (espnSchool.includes(tn) || tn.includes(espnSchool)) {
         schoolMatches.push({ team: t, score: tn.length });
       }
-      // Also try stripping from the KV side
       const tSchool = norm(stripMascot(t.name.toLowerCase()));
       if (tSchool && (espnSchool.includes(tSchool) || tSchool.includes(espnSchool))) {
         schoolMatches.push({ team: t, score: tSchool.length });
