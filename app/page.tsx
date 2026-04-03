@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { TeamStats, ModelWeights, DEFAULT_WEIGHTS, computePowerRating, predictMatchup, SlateGame } from '@/lib/model';
+import { TeamStats, ModelWeights, DEFAULT_WEIGHTS, computePowerRating, predictMatchup, probToAmericanOdds, getConfidenceTier, SlateGame } from '@/lib/model';
 
 interface RankingEntry { rank: number; team: string; record: string; prev: string; }
 
@@ -22,6 +22,41 @@ function WeightSlider({ label, value, onChange, accent }: { label: string; value
       <span style={{ width: 30, textAlign: 'right', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{value}</span>
     </div>
   );
+}
+
+// ─── DATE HELPERS ───
+
+function getTodayET(): string {
+  const now = new Date();
+  const eastern = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const y = eastern.getFullYear();
+  const m = String(eastern.getMonth() + 1).padStart(2, '0');
+  const d = String(eastern.getDate()).padStart(2, '0');
+  return `${y}${m}${d}`;
+}
+
+function shiftDate(yyyymmdd: string, days: number): string {
+  const y = parseInt(yyyymmdd.slice(0, 4));
+  const m = parseInt(yyyymmdd.slice(4, 6)) - 1;
+  const d = parseInt(yyyymmdd.slice(6, 8));
+  const dt = new Date(y, m, d);
+  dt.setDate(dt.getDate() + days);
+  const ny = dt.getFullYear();
+  const nm = String(dt.getMonth() + 1).padStart(2, '0');
+  const nd = String(dt.getDate()).padStart(2, '0');
+  return `${ny}${nm}${nd}`;
+}
+
+function formatDateDisplay(yyyymmdd: string): string {
+  const y = parseInt(yyyymmdd.slice(0, 4));
+  const m = parseInt(yyyymmdd.slice(4, 6)) - 1;
+  const d = parseInt(yyyymmdd.slice(6, 8));
+  const dt = new Date(y, m, d);
+  return dt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }).toUpperCase();
+}
+
+function isToday(yyyymmdd: string): boolean {
+  return yyyymmdd === getTodayET();
 }
 
 // ─── DISCLAIMER POPUP ───
@@ -73,6 +108,108 @@ function DisclaimerPopup({ onAccept }: { onAccept: () => void }) {
   );
 }
 
+// ─── INLINE GAME PREDICTION CARD ───
+
+function GameCard({
+  game, prediction, favName, underdogName, onClickAnalyze, index, total,
+}: {
+  game: SlateGame;
+  prediction: { spread: number; projTotal: number; winProbA: number; confidence: number; mlValue: boolean } | null;
+  favName: string;
+  underdogName: string;
+  onClickAnalyze: () => void;
+  index: number;
+  total: number;
+}) {
+  const tier = prediction ? getConfidenceTier(prediction.confidence) : null;
+  const tierColor = tier === 'STRONG' ? 'var(--green)' : tier === 'LEAN' ? 'var(--amber)' : 'var(--text-muted)';
+
+  return (
+    <div
+      onClick={onClickAnalyze}
+      style={{
+        padding: '14px 20px',
+        borderBottom: index < total - 1 ? '1px solid var(--border)' : 'none',
+        background: index % 2 === 0 ? 'transparent' : 'var(--surface-2)',
+        cursor: 'pointer', transition: 'background 0.15s',
+      }}
+      onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-3)')}
+      onMouseLeave={e => (e.currentTarget.style.background = index % 2 === 0 ? 'transparent' : 'var(--surface-2)')}
+    >
+      {/* Row 1: Matchup + Time */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: prediction ? 10 : 0 }}>
+        <div>
+          <span style={{ fontWeight: 700, fontSize: 14 }}>{game.away}</span>
+          <span style={{ color: 'var(--text-muted)', margin: '0 8px', fontSize: 12 }}>at</span>
+          <span style={{ fontWeight: 700, fontSize: 14 }}>{game.home}</span>
+        </div>
+        <span style={{ fontSize: 12, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
+          {game.time && game.time !== 'TBD' ? game.time : ''}
+        </span>
+      </div>
+
+      {/* Row 2: Prediction line — spread, total, ML */}
+      {prediction && (
+        <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* Spread */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1 }}>SPREAD</span>
+            <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--green)' }}>
+              {prediction.spread === 0 ? 'PK' : `${favName} ${prediction.spread > 0 ? -Math.abs(prediction.spread) : -Math.abs(prediction.spread)}`}
+            </span>
+          </div>
+
+          {/* Divider */}
+          <span style={{ color: 'var(--border)', fontSize: 14 }}>|</span>
+
+          {/* Total */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1 }}>TOTAL</span>
+            <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--amber)' }}>
+              {prediction.projTotal}
+            </span>
+          </div>
+
+          {/* Divider */}
+          <span style={{ color: 'var(--border)', fontSize: 14 }}>|</span>
+
+          {/* ML */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1 }}>ML</span>
+            <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>
+              {favName} {probToAmericanOdds(Math.max(prediction.winProbA, 1 - prediction.winProbA))}
+            </span>
+          </div>
+
+          {/* Divider */}
+          <span style={{ color: 'var(--border)', fontSize: 14 }}>|</span>
+
+          {/* Confidence tier */}
+          <span style={{
+            fontSize: 9, fontWeight: 700, fontFamily: 'var(--font-mono)', letterSpacing: 1.2,
+            color: tierColor,
+            background: tier === 'STRONG' ? 'rgba(102,187,106,0.12)' : tier === 'LEAN' ? 'rgba(255,202,40,0.12)' : 'rgba(74,85,104,0.12)',
+            padding: '2px 7px', borderRadius: 3,
+          }}>
+            {tier}
+          </span>
+
+          {prediction.mlValue && (
+            <span style={{ fontSize: 9, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--green)', letterSpacing: 1 }}>★ VALUE</span>
+          )}
+        </div>
+      )}
+
+      {/* No prediction available */}
+      {!prediction && (
+        <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: 4 }}>
+          No model data available
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── MAIN DASHBOARD ───
 
 export default function Dashboard() {
@@ -84,10 +221,12 @@ export default function Dashboard() {
   const [weights, setWeights] = useState<ModelWeights>(DEFAULT_WEIGHTS);
   const [activeTab, setActiveTab] = useState('slate');
   const [loading, setLoading] = useState(true);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
   const [teamAName, setTeamAName] = useState('');
   const [teamBName, setTeamBName] = useState('');
   const [showWeights, setShowWeights] = useState(false);
   const [disclaimerAccepted, setDisclaimerAccepted] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(getTodayET());
 
   // Check if disclaimer was already accepted this session
   useEffect(() => {
@@ -103,11 +242,27 @@ export default function Dashboard() {
     try { sessionStorage.setItem('lax-edge-disclaimer', 'accepted'); } catch {}
   }
 
+  // Fetch schedule for a specific date
+  const fetchSchedule = useCallback(async (date: string) => {
+    setScheduleLoading(true);
+    try {
+      const res = await fetch(`/api/schedule?date=${date}`);
+      const data = await res.json();
+      setSchedule(data.games || []);
+    } catch (err) {
+      console.error('Failed to load schedule:', err);
+      setSchedule([]);
+    } finally {
+      setScheduleLoading(false);
+    }
+  }, []);
+
+  // Initial data load
   useEffect(() => {
     async function loadData() {
       try {
         const [teamsRes, schedRes, rankRes] = await Promise.all([
-          fetch('/api/teams'), fetch('/api/schedule'), fetch('/api/rankings'),
+          fetch('/api/teams'), fetch(`/api/schedule?date=${selectedDate}`), fetch('/api/rankings'),
         ]);
         const teamsData = await teamsRes.json();
         const schedData = await schedRes.json();
@@ -123,7 +278,18 @@ export default function Dashboard() {
       finally { setLoading(false); }
     }
     loadData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Date navigation
+  function goToDate(date: string) {
+    setSelectedDate(date);
+    fetchSchedule(date);
+  }
+
+  function goPrev() { goToDate(shiftDate(selectedDate, -1)); }
+  function goNext() { goToDate(shiftDate(selectedDate, 1)); }
+  function goToday() { goToDate(getTodayET()); }
 
   const sortedTeams = useMemo(() => [...teams].sort((a, b) => a.name.localeCompare(b.name)), [teams]);
   const teamA = teams.find(t => t.name === teamAName);
@@ -135,15 +301,12 @@ export default function Dashboard() {
   const findTeamName = useCallback((espnName: string): string | null => {
     if (!espnName) return null;
     const lower = espnName.toLowerCase();
-    // Exact match
     const exact = teams.find(t => t.name.toLowerCase() === lower);
     if (exact) return exact.name;
-    // ESPN uses full names like "Johns Hopkins University Blue Jays" — try partial matching
     const partial = teams.find(t =>
       lower.includes(t.name.toLowerCase()) || t.name.toLowerCase().includes(lower)
     );
     if (partial) return partial.name;
-    // Try matching just the school name (first part before common suffixes)
     const cleaned = lower.replace(/(university|college|institute|state|st\.)?\s*(blue jays|scarlet knights|tar heels|orange|cavaliers|fighting irish|big green|terriers|crimson|hoyas|pioneers|retrievers|bulldogs|bears|tigers|lions|eagles|hawks|cardinals|wildcats|wolverines|aggies|huskies|panthers|rams|red storm|wolfpack|demon deacons|yellow jackets)?\s*$/i, '').trim();
     if (cleaned) {
       const cleanMatch = teams.find(t => t.name.toLowerCase().includes(cleaned) || cleaned.includes(t.name.toLowerCase()));
@@ -151,6 +314,31 @@ export default function Dashboard() {
     }
     return null;
   }, [teams]);
+
+  // Compute predictions for all schedule games
+  const schedulePredictions = useMemo(() => {
+    return schedule.map(game => {
+      const awayTeam = teams.find(t => {
+        const n = t.name.toLowerCase();
+        const g = game.away.toLowerCase();
+        return n === g || g.includes(n) || n.includes(g);
+      });
+      const homeTeam = teams.find(t => {
+        const n = t.name.toLowerCase();
+        const g = game.home.toLowerCase();
+        return n === g || g.includes(n) || n.includes(g);
+      });
+      if (awayTeam && homeTeam) {
+        const pred = predictMatchup(awayTeam, homeTeam, weights);
+        // Determine favorite
+        const favIsAway = pred.winProbA >= 0.5;
+        const favName = favIsAway ? game.away : game.home;
+        const underdogName = favIsAway ? game.home : game.away;
+        return { prediction: pred, favName, underdogName, awayTeam, homeTeam };
+      }
+      return { prediction: null, favName: '', underdogName: '', awayTeam: null, homeTeam: null };
+    });
+  }, [schedule, teams, weights]);
 
   function handleSlateClick(awayEspn: string, homeEspn: string) {
     const matchA = findTeamName(awayEspn);
@@ -162,7 +350,7 @@ export default function Dashboard() {
 
   if (loading) return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>Loading LAX EDGE...</div>;
 
-  const tabs = [{ key: 'slate', label: "TODAY'S SLATE" }, { key: 'predict', label: 'PREDICTOR' }, { key: 'rankings', label: 'RANKINGS' }];
+  const tabs = [{ key: 'slate', label: 'SCHEDULE' }, { key: 'predict', label: 'PREDICTOR' }, { key: 'rankings', label: 'RANKINGS' }];
 
   const FOOTER_DISCLAIMER = 'For informational and entertainment purposes only. All predictions are probabilistic estimates based on publicly available NCAA data and are not guarantees of any outcome. Content is provided as-is with no warranty of accuracy.';
 
@@ -177,7 +365,7 @@ export default function Dashboard() {
           <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 36, letterSpacing: 2, color: 'var(--accent)', margin: 0, lineHeight: 1 }}>LAX EDGE</h1>
           <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>NCAA D1 MEN'S LACROSSE</span>
         </div>
-        <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--text-dim)' }}>Matchup predictor & daily schedule</p>
+        <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--text-dim)' }}>Matchup predictor & schedule</p>
       </div>
 
       {/* TABS */}
@@ -194,43 +382,86 @@ export default function Dashboard() {
 
       <div style={{ padding: '20px 24px', maxWidth: 900, margin: '0 auto' }}>
 
-        {/* ═══ TODAY'S SLATE ═══ */}
+        {/* ═══ SCHEDULE ═══ */}
         {activeTab === 'slate' && (
           <div>
-            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1.5, marginBottom: 16 }}>
-              {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }).toUpperCase()} — {schedule.length} GAMES
+            {/* Date navigation */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, gap: 12 }}>
+              <button onClick={goPrev} style={{
+                background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6,
+                color: 'var(--text-primary)', fontSize: 18, padding: '6px 14px', cursor: 'pointer',
+                fontFamily: 'var(--font-mono)', lineHeight: 1,
+              }}>◀</button>
+
+              <div style={{ textAlign: 'center', flex: 1 }}>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1.5 }}>
+                  {formatDateDisplay(selectedDate)} — {scheduleLoading ? '...' : `${schedule.length} GAME${schedule.length !== 1 ? 'S' : ''}`}
+                </div>
+                {!isToday(selectedDate) && (
+                  <button onClick={goToday} style={{
+                    background: 'none', border: 'none', color: 'var(--accent)', fontSize: 10,
+                    fontFamily: 'var(--font-mono)', cursor: 'pointer', marginTop: 4, letterSpacing: 1,
+                    textDecoration: 'underline', padding: 0,
+                  }}>
+                    BACK TO TODAY
+                  </button>
+                )}
+              </div>
+
+              <button onClick={goNext} style={{
+                background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6,
+                color: 'var(--text-primary)', fontSize: 18, padding: '6px 14px', cursor: 'pointer',
+                fontFamily: 'var(--font-mono)', lineHeight: 1,
+              }}>▶</button>
             </div>
-            {schedule.length === 0 && (
+
+            {/* Loading state */}
+            {scheduleLoading && (
               <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '40px 20px', textAlign: 'center' }}>
-                <div style={{ fontSize: 14, color: 'var(--text-dim)', marginBottom: 8 }}>No games scheduled for today</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>Check back on game days or use the Predictor tab</div>
+                <div style={{ fontSize: 14, color: 'var(--text-dim)' }}>Loading schedule...</div>
               </div>
             )}
-            {schedule.length > 0 && (
+
+            {/* No games */}
+            {!scheduleLoading && schedule.length === 0 && (
+              <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '40px 20px', textAlign: 'center' }}>
+                <div style={{ fontSize: 14, color: 'var(--text-dim)', marginBottom: 8 }}>No games scheduled</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>Try navigating to a different date or use the Predictor tab</div>
+              </div>
+            )}
+
+            {/* Games list */}
+            {!scheduleLoading && schedule.length > 0 && (
               <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', padding: '10px 20px', borderBottom: '1px solid var(--border)', fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', letterSpacing: 1.2 }}>
-                  <span>MATCHUP <span style={{ color: 'var(--accent)', marginLeft: 8, letterSpacing: 0.5 }}>click to analyze</span></span><span>TIME</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 20px', borderBottom: '1px solid var(--border)', fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', letterSpacing: 1.2 }}>
+                  <span>MATCHUP & LAX EDGE LINE <span style={{ color: 'var(--accent)', marginLeft: 8, letterSpacing: 0.5 }}>click to analyze</span></span>
                 </div>
-                {schedule.map((g, i) => (
-                  <div key={i} onClick={() => handleSlateClick(g.away, g.home)} style={{
-                    display: 'grid', gridTemplateColumns: '1fr auto', padding: '12px 20px',
-                    borderBottom: i < schedule.length - 1 ? '1px solid var(--border)' : 'none',
-                    background: i % 2 === 0 ? 'transparent' : 'var(--surface-2)', alignItems: 'center',
-                    cursor: 'pointer', transition: 'background 0.15s',
-                  }}
-                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-3)')}
-                  onMouseLeave={e => (e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : 'var(--surface-2)')}
-                  >
-                    <div>
-                      <span style={{ fontWeight: 700, fontSize: 14 }}>{g.away}</span>
-                      <span style={{ color: 'var(--text-muted)', margin: '0 8px', fontSize: 12 }}>at</span>
-                      <span style={{ fontWeight: 700, fontSize: 14 }}>{g.home}</span>
-                    </div>
-                    <span style={{ fontSize: 12, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
-                      {g.time && g.time !== 'TBD' ? g.time : ''}
-                    </span>
-                  </div>
-                ))}
+                {schedule.map((g, i) => {
+                  const sp = schedulePredictions[i];
+                  return (
+                    <GameCard
+                      key={i}
+                      game={g}
+                      prediction={sp?.prediction || null}
+                      favName={sp?.favName || ''}
+                      underdogName={sp?.underdogName || ''}
+                      onClickAnalyze={() => handleSlateClick(g.away, g.home)}
+                      index={i}
+                      total={schedule.length}
+                    />
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Legend */}
+            {!scheduleLoading && schedule.length > 0 && (
+              <div style={{ marginTop: 12, padding: '10px 16px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'center' }}>
+                <span style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1.2 }}>CONFIDENCE:</span>
+                <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--green)', fontWeight: 700 }}>STRONG</span>
+                <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--amber)', fontWeight: 700 }}>LEAN</span>
+                <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', fontWeight: 700 }}>TOSS-UP</span>
+                <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--green)' }}>★ VALUE = strong ML edge</span>
               </div>
             )}
           </div>
@@ -287,6 +518,9 @@ export default function Dashboard() {
                     </div>
                     <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 6 }}>
                       {prediction.winProbA >= 0.5 ? teamAName : teamBName}
+                      <span style={{ marginLeft: 6, fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--accent)' }}>
+                        {probToAmericanOdds(Math.max(prediction.winProbA, 1 - prediction.winProbA))}
+                      </span>
                       {prediction.mlValue && <span style={{ color: 'var(--green)', marginLeft: 6, fontWeight: 700 }}>★ ML VALUE</span>}
                     </div>
                   </div>
@@ -406,7 +640,7 @@ export default function Dashboard() {
             {FOOTER_DISCLAIMER}
           </div>
           <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: 12, letterSpacing: 0.5 }}>
-            LAX EDGE v3.0
+            LAX EDGE v4.0
           </div>
         </div>
       </div>
