@@ -298,20 +298,70 @@ export default function Dashboard() {
   const updateWeight = useCallback((key: string, val: number) => setWeights(prev => ({ ...prev, [key]: val })), []);
 
   // Match ESPN team names to stats team names (fuzzy match)
+  // Uses longest-match-wins to avoid "Loyola Maryland" matching "Maryland"
   const findTeamName = useCallback((espnName: string): string | null => {
     if (!espnName) return null;
     const lower = espnName.toLowerCase();
+
+    // 1. Exact match
     const exact = teams.find(t => t.name.toLowerCase() === lower);
     if (exact) return exact.name;
-    const partial = teams.find(t =>
-      lower.includes(t.name.toLowerCase()) || t.name.toLowerCase().includes(lower)
-    );
-    if (partial) return partial.name;
-    const cleaned = lower.replace(/(university|college|institute|state|st\.)?\s*(blue jays|scarlet knights|tar heels|orange|cavaliers|fighting irish|big green|terriers|crimson|hoyas|pioneers|retrievers|bulldogs|bears|tigers|lions|eagles|hawks|cardinals|wildcats|wolverines|aggies|huskies|panthers|rams|red storm|wolfpack|demon deacons|yellow jackets)?\s*$/i, '').trim();
-    if (cleaned) {
-      const cleanMatch = teams.find(t => t.name.toLowerCase().includes(cleaned) || cleaned.includes(t.name.toLowerCase()));
-      if (cleanMatch) return cleanMatch.name;
+
+    // Helper: normalize abbreviations for comparison
+    function norm(s: string): string {
+      return s.toLowerCase()
+        .replace(/\bu\.\s*/g, 'university ')
+        .replace(/\bst\.\s*/g, 'saint ')
+        .replace(/\bumass\b/g, 'massachusetts')
+        .replace(/\buconn\b/g, 'connecticut')
+        .replace(/\bliu\b/g, 'long island')
+        .replace(/\bnjit\b/g, 'njit')
+        .replace(/\bumbc\b/g, 'umbc')
+        .trim();
     }
+
+    // Strip common mascot names from ESPN full names to get school name
+    function stripMascot(s: string): string {
+      return s.replace(/\s+(blue jays|scarlet knights|tar heels|orange|orangemen|cavaliers|fighting irish|big green|terriers|crimson|hoyas|pioneers|retrievers|bulldogs|bears|tigers|lions|eagles|hawks|cardinals|wildcats|wolverines|aggies|huskies|panthers|rams|red storm|wolfpack|demon deacons|yellow jackets|greyhounds|jaspers|warriors|seahawks|vikings|colonials|keydets|bobcats|royals|dolphins|sharks|lakers|river hawks|titans|falcons|knights|golden eagles|statesmen|blue hens|red foxes|seawolves|bonnies|gaels|golden griffins|stags|pride|crusaders|midshipmen|big red|quakers|minutemen|buckeyes|terrapins|catamounts|spiders|saints|great danes|raiders|leopards|bearcats|mounties|mountaineers)$/i, '').trim();
+    }
+
+    const espnNorm = norm(lower);
+    const espnSchool = norm(stripMascot(lower));
+
+    // 2. Find ALL partial matches and pick the longest (most specific)
+    function bestMatch(candidates: { team: TeamStats; score: number }[]): string | null {
+      if (candidates.length === 0) return null;
+      candidates.sort((a, b) => b.score - a.score);
+      return candidates[0].team.name;
+    }
+
+    // Try normalized substring matching — prefer longest team name match
+    const substringMatches: { team: TeamStats; score: number }[] = [];
+    for (const t of teams) {
+      const tn = norm(t.name.toLowerCase());
+      if (espnNorm.includes(tn) || tn.includes(espnNorm)) {
+        substringMatches.push({ team: t, score: tn.length });
+      }
+    }
+    const subResult = bestMatch(substringMatches);
+    if (subResult) return subResult;
+
+    // 3. Try matching with mascots stripped
+    const schoolMatches: { team: TeamStats; score: number }[] = [];
+    for (const t of teams) {
+      const tn = norm(t.name.toLowerCase());
+      if (espnSchool.includes(tn) || tn.includes(espnSchool)) {
+        schoolMatches.push({ team: t, score: tn.length });
+      }
+      // Also try stripping from the KV side
+      const tSchool = norm(stripMascot(t.name.toLowerCase()));
+      if (tSchool && (espnSchool.includes(tSchool) || tSchool.includes(espnSchool))) {
+        schoolMatches.push({ team: t, score: tSchool.length });
+      }
+    }
+    const schoolResult = bestMatch(schoolMatches);
+    if (schoolResult) return schoolResult;
+
     return null;
   }, [teams]);
 
