@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { TeamStats, ModelWeights, DEFAULT_WEIGHTS, computePowerRating, predictMatchup, probToAmericanOdds, getConfidenceTier, SlateGame } from '@/lib/model';
+import { TeamStats, ModelWeights, DEFAULT_WEIGHTS, computePowerRating, predictMatchup, probToAmericanOdds, getConfidenceTier, SlateGame, getSOSTier, SOS_TIERS } from '@/lib/model';
 
 interface RankingEntry { rank: number; team: string; record: string; prev: string; }
 
@@ -227,6 +227,7 @@ export default function Dashboard() {
   const [showWeights, setShowWeights] = useState(false);
   const [disclaimerAccepted, setDisclaimerAccepted] = useState(false);
   const [selectedDate, setSelectedDate] = useState(getTodayET());
+  const [useSOS, setUseSOS] = useState(false);
 
   // Check if disclaimer was already accepted this session
   useEffect(() => {
@@ -294,16 +295,14 @@ export default function Dashboard() {
   const sortedTeams = useMemo(() => [...teams].sort((a, b) => a.name.localeCompare(b.name)), [teams]);
   const teamA = teams.find(t => t.name === teamAName);
   const teamB = teams.find(t => t.name === teamBName);
-  const prediction = useMemo(() => teamA && teamB ? predictMatchup(teamA, teamB, weights) : null, [teamA, teamB, weights]);
+  const prediction = useMemo(() => teamA && teamB ? predictMatchup(teamA, teamB, weights, useSOS) : null, [teamA, teamB, weights, useSOS]);
   const updateWeight = useCallback((key: string, val: number) => setWeights(prev => ({ ...prev, [key]: val })), []);
 
   // Match ESPN team names to stats team names (fuzzy match)
-  // Uses manual aliases + longest-match-wins for edge cases
   const findTeamName = useCallback((espnName: string): string | null => {
     if (!espnName) return null;
     const lower = espnName.toLowerCase();
 
-    // 0. Manual alias map — checked FIRST for known ESPN ↔ KV mismatches
     const ALIASES: [string, string][] = [
       ['army', 'Army West Point'],
       ['cleveland state', 'Cleveland St.'],
@@ -315,7 +314,6 @@ export default function Dashboard() {
       ['saint joseph', "Saint Joseph's"],
       ['st. bonaventure', 'St. Bonaventure'],
     ];
-    // Check longest alias keys first so "umass lowell" beats "umass"
     const sortedAliases = [...ALIASES].sort((a, b) => b[0].length - a[0].length);
     for (const [alias, kvName] of sortedAliases) {
       if (lower.includes(alias)) {
@@ -324,11 +322,9 @@ export default function Dashboard() {
       }
     }
 
-    // 1. Exact match
     const exact = teams.find(t => t.name.toLowerCase() === lower);
     if (exact) return exact.name;
 
-    // Helper: normalize State/St., University/U. to common forms
     function norm(s: string): string {
       return s.toLowerCase()
         .replace(/\bu\.\s*/g, 'university ')
@@ -337,7 +333,6 @@ export default function Dashboard() {
         .trim();
     }
 
-    // Strip mascot names from ESPN full names
     function stripMascot(s: string): string {
       return s.replace(/\s+(black knights|blue jays|scarlet knights|tar heels|orange|orangemen|cavaliers|fighting irish|big green|terriers|crimson|hoyas|pioneers|retrievers|bulldogs|bears|tigers|lions|eagles|hawks|cardinals|wildcats|wolverines|aggies|huskies|panthers|rams|red storm|wolfpack|demon deacons|yellow jackets|greyhounds|jaspers|warriors|seahawks|vikings|colonials|keydets|bobcats|royals|dolphins|sharks|lakers|river hawks|titans|falcons|knights|golden eagles|statesmen|blue hens|red foxes|seawolves|bonnies|gaels|golden griffins|stags|pride|crusaders|midshipmen|big red|quakers|minutemen|buckeyes|terrapins|catamounts|spiders|saints|great danes|raiders|leopards|bearcats|mounties|mountaineers|highlanders|bison|pirates|utes|dragons|nittany lions)$/i, '').trim();
     }
@@ -345,10 +340,8 @@ export default function Dashboard() {
     const espnNorm = norm(lower);
     const espnSchool = norm(stripMascot(lower));
 
-    // 2. Find ALL partial matches and pick the longest (most specific)
     function bestMatch(candidates: { team: TeamStats; score: number }[]): string | null {
       if (candidates.length === 0) return null;
-      // Deduplicate by team name, keeping highest score
       const best = new Map<string, { team: TeamStats; score: number }>();
       for (const c of candidates) {
         const existing = best.get(c.team.name);
@@ -358,7 +351,6 @@ export default function Dashboard() {
       return sorted[0].team.name;
     }
 
-    // Try normalized substring matching — prefer longest team name match
     const substringMatches: { team: TeamStats; score: number }[] = [];
     for (const t of teams) {
       const tn = norm(t.name.toLowerCase());
@@ -369,7 +361,6 @@ export default function Dashboard() {
     const subResult = bestMatch(substringMatches);
     if (subResult) return subResult;
 
-    // 3. Try matching with mascots stripped on both sides
     const schoolMatches: { team: TeamStats; score: number }[] = [];
     for (const t of teams) {
       const tn = norm(t.name.toLowerCase());
@@ -395,7 +386,7 @@ export default function Dashboard() {
       const awayTeam = awayName ? teams.find(t => t.name === awayName) : null;
       const homeTeam = homeName ? teams.find(t => t.name === homeName) : null;
       if (awayTeam && homeTeam) {
-        const pred = predictMatchup(awayTeam, homeTeam, weights);
+        const pred = predictMatchup(awayTeam, homeTeam, weights, useSOS);
         const favIsAway = pred.winProbA >= 0.5;
         const favName = favIsAway ? game.away : game.home;
         const underdogName = favIsAway ? game.home : game.away;
@@ -403,7 +394,7 @@ export default function Dashboard() {
       }
       return { prediction: null, favName: '', underdogName: '', awayTeam: null, homeTeam: null };
     });
-  }, [schedule, teams, weights, findTeamName]);
+  }, [schedule, teams, weights, findTeamName, useSOS]);
 
   function handleSlateClick(awayEspn: string, homeEspn: string) {
     const matchA = findTeamName(awayEspn);
@@ -450,6 +441,33 @@ export default function Dashboard() {
         {/* ═══ SCHEDULE ═══ */}
         {activeTab === 'slate' && (
           <div>
+            {/* SOS Toggle for Schedule */}
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '8px 16px', background: useSOS ? 'rgba(34,197,94,0.08)' : 'var(--surface)',
+              border: `1px solid ${useSOS ? 'rgba(34,197,94,0.3)' : 'var(--border)'}`,
+              borderRadius: 8, marginBottom: 12, transition: 'all 0.2s',
+            }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: useSOS ? '#22c55e' : 'var(--text-dim)', fontFamily: 'var(--font-mono)', letterSpacing: 1 }}>
+                SOS {useSOS ? 'ON' : 'OFF'}
+              </div>
+              <div
+                onClick={() => setUseSOS(!useSOS)}
+                style={{
+                  width: 38, height: 20, borderRadius: 10, cursor: 'pointer',
+                  background: useSOS ? '#22c55e' : 'var(--surface-3)',
+                  border: `1px solid ${useSOS ? '#22c55e' : 'var(--border)'}`,
+                  position: 'relative', transition: 'all 0.2s', flexShrink: 0,
+                }}
+              >
+                <div style={{
+                  width: 14, height: 14, borderRadius: 7,
+                  background: '#fff', position: 'absolute', top: 2,
+                  left: useSOS ? 20 : 2, transition: 'left 0.2s',
+                }} />
+              </div>
+            </div>
+
             {/* Date navigation */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, gap: 12 }}>
               <button onClick={goPrev} style={{
@@ -499,7 +517,7 @@ export default function Dashboard() {
             {!scheduleLoading && schedule.length > 0 && (
               <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 20px', borderBottom: '1px solid var(--border)', fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', letterSpacing: 1.2 }}>
-                  <span>MATCHUP & LAX EDGE LINE <span style={{ color: 'var(--accent)', marginLeft: 8, letterSpacing: 0.5 }}>click to analyze</span></span>
+                  <span>MATCHUP & LAX EDGE LINE {useSOS && <span style={{ color: '#22c55e', marginLeft: 4 }}>· SOS ADJ</span>} <span style={{ color: 'var(--accent)', marginLeft: 8, letterSpacing: 0.5 }}>click to analyze</span></span>
                 </div>
                 {schedule.map((g, i) => {
                   const sp = schedulePredictions[i];
@@ -535,6 +553,38 @@ export default function Dashboard() {
         {/* ═══ PREDICTOR ═══ */}
         {activeTab === 'predict' && (
           <div>
+            {/* SOS Toggle */}
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '10px 16px', background: useSOS ? 'rgba(34,197,94,0.08)' : 'var(--surface)',
+              border: `1px solid ${useSOS ? 'rgba(34,197,94,0.3)' : 'var(--border)'}`,
+              borderRadius: 8, marginBottom: 16, transition: 'all 0.2s',
+            }}>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: useSOS ? '#22c55e' : 'var(--text-dim)', fontFamily: 'var(--font-mono)', letterSpacing: 1 }}>
+                  SOS ADJUSTMENT
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+                  {useSOS ? 'Adjusting stats for strength of schedule' : 'Raw stats only — no schedule adjustment'}
+                </div>
+              </div>
+              <div
+                onClick={() => setUseSOS(!useSOS)}
+                style={{
+                  width: 44, height: 24, borderRadius: 12, cursor: 'pointer',
+                  background: useSOS ? '#22c55e' : 'var(--surface-3)',
+                  border: `1px solid ${useSOS ? '#22c55e' : 'var(--border)'}`,
+                  position: 'relative', transition: 'all 0.2s', flexShrink: 0,
+                }}
+              >
+                <div style={{
+                  width: 18, height: 18, borderRadius: 9,
+                  background: '#fff', position: 'absolute', top: 2,
+                  left: useSOS ? 22 : 2, transition: 'left 0.2s',
+                }} />
+              </div>
+            </div>
+
             <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 16, alignItems: 'center', marginBottom: 24 }}>
               <div>
                 <label style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1 }}>TEAM A</label>
@@ -544,6 +594,23 @@ export default function Dashboard() {
                 }}>
                   {sortedTeams.map(t => <option key={t.name} value={t.name}>{t.name}</option>)}
                 </select>
+                {useSOS && teamAName && (() => {
+                  const tier = getSOSTier(teamAName);
+                  return (
+                    <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{
+                        fontSize: 9, fontWeight: 700, fontFamily: 'var(--font-mono)',
+                        color: tier.color, background: tier.color + '18',
+                        padding: '2px 8px', borderRadius: 4, letterSpacing: 1,
+                      }}>
+                        {tier.label.toUpperCase()}
+                      </span>
+                      <span style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                        {tier.multiplier}x
+                      </span>
+                    </div>
+                  );
+                })()}
               </div>
               <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, color: 'var(--text-muted)', marginTop: 16 }}>VS</div>
               <div>
@@ -554,6 +621,23 @@ export default function Dashboard() {
                 }}>
                   {sortedTeams.map(t => <option key={t.name} value={t.name}>{t.name}</option>)}
                 </select>
+                {useSOS && teamBName && (() => {
+                  const tier = getSOSTier(teamBName);
+                  return (
+                    <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{
+                        fontSize: 9, fontWeight: 700, fontFamily: 'var(--font-mono)',
+                        color: tier.color, background: tier.color + '18',
+                        padding: '2px 8px', borderRadius: 4, letterSpacing: 1,
+                      }}>
+                        {tier.label.toUpperCase()}
+                      </span>
+                      <span style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                        {tier.multiplier}x
+                      </span>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
 
@@ -705,7 +789,7 @@ export default function Dashboard() {
             {FOOTER_DISCLAIMER}
           </div>
           <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: 12, letterSpacing: 0.5 }}>
-            LAX EDGE v4.0
+            LAX EDGE v4.1
           </div>
         </div>
       </div>
