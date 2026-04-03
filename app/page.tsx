@@ -318,19 +318,12 @@ export default function Dashboard() {
   // Compute predictions for all schedule games
   const schedulePredictions = useMemo(() => {
     return schedule.map(game => {
-      const awayTeam = teams.find(t => {
-        const n = t.name.toLowerCase();
-        const g = game.away.toLowerCase();
-        return n === g || g.includes(n) || n.includes(g);
-      });
-      const homeTeam = teams.find(t => {
-        const n = t.name.toLowerCase();
-        const g = game.home.toLowerCase();
-        return n === g || g.includes(n) || n.includes(g);
-      });
+      const awayName = findTeamName(game.away);
+      const homeName = findTeamName(game.home);
+      const awayTeam = awayName ? teams.find(t => t.name === awayName) : null;
+      const homeTeam = homeName ? teams.find(t => t.name === homeName) : null;
       if (awayTeam && homeTeam) {
         const pred = predictMatchup(awayTeam, homeTeam, weights);
-        // Determine favorite
         const favIsAway = pred.winProbA >= 0.5;
         const favName = favIsAway ? game.away : game.home;
         const underdogName = favIsAway ? game.home : game.away;
@@ -338,7 +331,7 @@ export default function Dashboard() {
       }
       return { prediction: null, favName: '', underdogName: '', awayTeam: null, homeTeam: null };
     });
-  }, [schedule, teams, weights]);
+  }, [schedule, teams, weights, findTeamName]);
 
   function handleSlateClick(awayEspn: string, homeEspn: string) {
     const matchA = findTeamName(awayEspn);
