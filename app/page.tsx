@@ -227,7 +227,7 @@ export default function Dashboard() {
   const [showWeights, setShowWeights] = useState(false);
   const [disclaimerAccepted, setDisclaimerAccepted] = useState(false);
   const [selectedDate, setSelectedDate] = useState(getTodayET());
-  const [useSOS, setUseSOS] = useState(false);
+  const [useSOS, setUseSOS] = useState(true);
 
   // Check if disclaimer was already accepted this session
   useEffect(() => {
