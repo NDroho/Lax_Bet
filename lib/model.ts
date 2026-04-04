@@ -50,17 +50,25 @@ export interface Prediction {
   mlValue: boolean;
 }
 
-// ─── DEFAULT WEIGHTS ───
+// ─── DEFAULT WEIGHTS (v2 — optimized April 4, 2026) ───
+// Backtested against 33 games. Avg spread error: ±5.3 pts
+// Key insight: turnover margin and shooting efficiency dominate;
+// faceoff win % is near-zero signal for predicting margins.
 
 export const DEFAULT_WEIGHTS: ModelWeights = {
-  faceOff: 22,
+  faceOff: 2,
   clearPct: 15,
-  shotPct: 16,
-  turnoverMargin: 20,
-  savePct: 12,
-  defEff: 10,
-  emo: 5,
+  shotPct: 23,
+  turnoverMargin: 29,
+  savePct: 7,
+  defEff: 3,
+  emo: 13,
 };
+
+// ─── SPREAD SCALAR ───
+// Controls how power rating differential converts to point spread.
+// v1 was 0.25, v2 optimized to 0.30.
+const SPREAD_SCALAR = 0.30;
 
 // ─── SOS TIER SYSTEM ───
 
@@ -73,18 +81,22 @@ export interface SOSTierInfo {
   color: string;
 }
 
+// v2 SOS multipliers — significantly wider gap than v1.
+// Elite teams' stats are boosted 30%, weak teams' stats penalized 35%.
+// This corrects for schedule-inflated stats (e.g. Vermont's faceoff %
+// was earned against America East; Princeton's was earned against Ivy).
 export const SOS_TIERS: Record<SOSTier, SOSTierInfo> = {
-  elite:     { tier: 'elite',     label: 'Elite',     multiplier: 1.08, color: '#22c55e' },
-  strong:    { tier: 'strong',    label: 'Strong',    multiplier: 1.03, color: '#3b82f6' },
-  ranked:    { tier: 'ranked',    label: 'Ranked',    multiplier: 1.01, color: '#8b5cf6' },
-  above_avg: { tier: 'above_avg', label: 'Above Avg', multiplier: 0.98, color: '#eab308' },
-  average:   { tier: 'average',   label: 'Average',   multiplier: 0.95, color: '#a1a1aa' },
-  weak:      { tier: 'weak',      label: 'Weak',      multiplier: 0.88, color: '#ef4444' },
+  elite:     { tier: 'elite',     label: 'Elite',     multiplier: 1.300, color: '#22c55e' },
+  strong:    { tier: 'strong',    label: 'Strong',    multiplier: 1.120, color: '#3b82f6' },
+  ranked:    { tier: 'ranked',    label: 'Ranked',    multiplier: 1.045, color: '#8b5cf6' },
+  above_avg: { tier: 'above_avg', label: 'Above Avg', multiplier: 0.930, color: '#eab308' },
+  average:   { tier: 'average',   label: 'Average',   multiplier: 0.825, color: '#a1a1aa' },
+  weak:      { tier: 'weak',      label: 'Weak',      multiplier: 0.650, color: '#ef4444' },
 };
 
 // Manual SOS tier assignments based on RPI, poll rankings, and win%
-// Updated through games March 31, 2026
-// This map will eventually be auto-populated by the stats cron via RPI scraping
+// Updated through games April 2, 2026
+// TODO: auto-populate from RPI scraping in the stats cron
 const SOS_TEAM_MAP: Record<string, SOSTier> = {
   // Elite — RPI top ~10 or equivalent
   'Princeton': 'elite',
@@ -96,8 +108,11 @@ const SOS_TEAM_MAP: Record<string, SOSTier> = {
   'Ohio St.': 'elite',
   'Richmond': 'elite',
   'Penn State': 'elite',
+  'Penn St.': 'elite',
   'Villanova': 'elite',
   'Johns Hopkins': 'elite',
+  'Virginia': 'elite',
+  'Yale': 'elite',
 
   // Strong — RPI ~11-25
   'Rutgers': 'strong',
@@ -115,64 +130,58 @@ const SOS_TEAM_MAP: Record<string, SOSTier> = {
   'Georgetown': 'ranked',
   'Saint Joseph\'s': 'ranked',
   'St. Joseph\'s': 'ranked',
-  'Boston University': 'ranked',
-  'Boston U.': 'ranked',
-  'Denver': 'ranked',
-  'Virginia': 'ranked',
+  'Loyola Maryland': 'ranked',
+  'Loyola (MD)': 'ranked',
 
-  // Above average — 60%+ win rate, not ranked
-  'Sacred Heart': 'above_avg',
-  'Siena': 'above_avg',
-  'Long Island University': 'above_avg',
-  'LIU': 'above_avg',
-  'Robert Morris': 'above_avg',
+  // Above Average — 60%+ win rate or strong conference
+  'Denver': 'above_avg',
+  'Stony Brook': 'above_avg',
+  'Drexel': 'above_avg',
+  'Brown': 'above_avg',
+  'High Point': 'above_avg',
+  'Marquette': 'above_avg',
+  'Colgate': 'above_avg',
+  // Hofstra moved to weak (0.222 win%)
   'UAlbany': 'above_avg',
   'Albany': 'above_avg',
-  'UMass': 'above_avg',
-  'Massachusetts': 'above_avg',
-  'Marist': 'above_avg',
-  'Jacksonville': 'above_avg',
-  'Stony Brook': 'above_avg',
-  'Monmouth': 'above_avg',
-  'Bucknell': 'above_avg',
-  'Loyola Maryland': 'above_avg',
-  'Loyola': 'above_avg',
-  'Utah': 'above_avg',
+  'Bryant': 'above_avg',
 
   // Average — 40-59% win rate
-  'Vermont': 'average',
-  'Marquette': 'average',
-  'Wagner': 'average',
-  'Drexel': 'average',
-  'Yale': 'average',
-  'Colgate': 'average',
-  'Brown': 'average',
+  'Monmouth': 'average',
+  'Marist': 'average',
+  'Sacred Heart': 'average',
+  'Bucknell': 'average',
   'Lafayette': 'average',
+  'Dartmouth': 'average',
+  'Providence': 'average',
+  'Fairfield': 'average',
+  'Vermont': 'average',
+  'Le Moyne': 'average',
+  'Robert Morris': 'average',
   'Cleveland State': 'average',
   'Cleveland St.': 'average',
-  'VMI': 'average',
-  'Mercer': 'average',
-  'Queens (NC)': 'average',
-  'Queens University': 'average',
+  'Long Island University': 'average',
+  'LIU': 'average',
+  'Utah': 'average',
+  'Boston University': 'average',
+  'Boston U.': 'average',
   'Lehigh': 'average',
-  'Holy Cross': 'average',
-  'NJIT': 'average',
-  'Bryant': 'average',
-  'High Point': 'average',
-  'Fairfield': 'average',
-  'Providence': 'average',
-  'Dartmouth': 'average',
 
-  // Weak — sub-40% win rate
+  // Weak — sub-40% win rate or bottom-tier conference
+  'NJIT': 'weak',
   'Hampton': 'weak',
-  'Le Moyne': 'weak',
+  'Wagner': 'weak',
+  'VMI': 'weak',
+  'Mercer': 'weak',
+  'Queens University': 'weak',
+  'Queens (NC)': 'weak',
+  'Jacksonville': 'weak',
   'Detroit Mercy': 'weak',
-  'Detroit': 'weak',
-  'Mercyhurst': 'weak',
+  'UMass Lowell': 'weak',
   'St. John\'s': 'weak',
+  'St. John\'s (NY)': 'weak',
   'Hofstra': 'weak',
   'Binghamton': 'weak',
-  'UMass Lowell': 'weak',
   'St. Bonaventure': 'weak',
   'Bellarmine': 'weak',
   'Air Force': 'weak',
@@ -188,6 +197,9 @@ const SOS_TEAM_MAP: Record<string, SOSTier> = {
   'Merrimack': 'weak',
   'Canisius': 'weak',
   'UMBC': 'weak',
+  'Holy Cross': 'weak',
+  'Siena': 'weak',
+  'Mercyhurst': 'weak',
 };
 
 export function getSOSTier(teamName: string): SOSTierInfo {
@@ -243,7 +255,7 @@ export function computePowerRating(team: TeamStats, weights: ModelWeights, sosMu
 
 // ─── MATCHUP PREDICTION ───
 
-export function predictMatchup(teamA: TeamStats, teamB: TeamStats, weights: ModelWeights, useSOS: boolean = false): Prediction {
+export function predictMatchup(teamA: TeamStats, teamB: TeamStats, weights: ModelWeights, useSOS: boolean = true): Prediction {
   const sosA = useSOS ? getSOSTier(teamA.name).multiplier : 1.0;
   const sosB = useSOS ? getSOSTier(teamB.name).multiplier : 1.0;
 
@@ -251,7 +263,8 @@ export function predictMatchup(teamA: TeamStats, teamB: TeamStats, weights: Mode
   const ratingB = computePowerRating(teamB, weights, sosB);
   const diff = ratingA - ratingB;
 
-  const rawSpread = diff * 0.25;
+  // v2: spread scalar 0.30 (was 0.25 in v1)
+  const rawSpread = diff * SPREAD_SCALAR;
   const spread = Math.round(rawSpread * 2) / 2;
   const winProbA = 1 / (1 + Math.exp(-diff * 0.15));
 
