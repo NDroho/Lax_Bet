@@ -16,6 +16,9 @@ export interface TeamStats {
   manUpPct: number;
   manDownPct: number;
   oppShotPct: number;
+  groundBallsPerGame?: number;
+  scoringMargin?: number;
+  winPct?: number;
   lastUpdated?: string;
   rating?: number;
 }
@@ -94,119 +97,28 @@ export const SOS_TIERS: Record<SOSTier, SOSTierInfo> = {
   weak:      { tier: 'weak',      label: 'Weak',      multiplier: 0.650, color: '#ef4444' },
 };
 
-// Manual SOS tier assignments based on RPI, poll rankings, and win%
-// Updated through games April 2, 2026
-// TODO: auto-populate from RPI scraping in the stats cron
-const SOS_TEAM_MAP: Record<string, SOSTier> = {
-  // Elite — RPI top ~10 or equivalent
-  'Princeton': 'elite',
-  'North Carolina': 'elite',
-  'Syracuse': 'elite',
-  'Harvard': 'elite',
-  'Notre Dame': 'elite',
-  'Ohio State': 'elite',
-  'Ohio St.': 'elite',
-  'Richmond': 'elite',
-  'Penn State': 'elite',
-  'Penn St.': 'elite',
-  'Villanova': 'elite',
-  'Johns Hopkins': 'elite',
-  'Virginia': 'elite',
-  'Yale': 'elite',
+// ─── DYNAMIC SOS TIER COMPUTATION ───
+// Automatically computed from team stats — updates every Wednesday
+// when the stats cron refreshes. No manual tier assignments needed.
+//
+// Uses winPct + scoringMargin to classify teams:
+//   Elite:     dominant record AND blowing teams out
+//   Strong:    winning consistently with positive margin
+//   Ranked:    above .500 with non-negative margin
+//   Above Avg: around .500 but competitive
+//   Average:   below .500 but still winning some
+//   Weak:      bad record, getting outscored
 
-  // Strong — RPI ~11-25
-  'Rutgers': 'strong',
-  'Cornell': 'strong',
-  'Duke': 'strong',
-  'Maryland': 'strong',
-  'Penn': 'strong',
-  'Pennsylvania': 'strong',
-  'Towson': 'strong',
-  'Army West Point': 'strong',
-  'Army': 'strong',
-  'Navy': 'strong',
+export function getSOSTier(team: TeamStats): SOSTierInfo {
+  const wp = team.winPct ?? 0;
+  const sm = team.scoringMargin ?? 0;
 
-  // Ranked — In poll top 20 but no confirmed top-25 RPI
-  'Georgetown': 'ranked',
-  'Saint Joseph\'s': 'ranked',
-  'St. Joseph\'s': 'ranked',
-  'Loyola Maryland': 'ranked',
-  'Loyola (MD)': 'ranked',
-
-  // Above Average — 60%+ win rate or strong conference
-  'Denver': 'above_avg',
-  'Stony Brook': 'above_avg',
-  'Drexel': 'above_avg',
-  'Brown': 'above_avg',
-  'High Point': 'above_avg',
-  'Marquette': 'above_avg',
-  'Colgate': 'above_avg',
-  // Hofstra moved to weak (0.222 win%)
-  'UAlbany': 'above_avg',
-  'Albany': 'above_avg',
-  'Bryant': 'above_avg',
-
-  // Average — 40-59% win rate
-  'Monmouth': 'average',
-  'Marist': 'average',
-  'Sacred Heart': 'average',
-  'Bucknell': 'average',
-  'Lafayette': 'average',
-  'Dartmouth': 'average',
-  'Providence': 'average',
-  'Fairfield': 'average',
-  'Vermont': 'average',
-  'Le Moyne': 'average',
-  'Robert Morris': 'average',
-  'Cleveland State': 'average',
-  'Cleveland St.': 'average',
-  'Long Island University': 'average',
-  'LIU': 'average',
-  'Utah': 'average',
-  'Boston University': 'average',
-  'Boston U.': 'average',
-  'Lehigh': 'average',
-
-  // Weak — sub-40% win rate or bottom-tier conference
-  'NJIT': 'weak',
-  'Hampton': 'weak',
-  'Wagner': 'weak',
-  'VMI': 'weak',
-  'Mercer': 'weak',
-  'Queens University': 'weak',
-  'Queens (NC)': 'weak',
-  'Jacksonville': 'weak',
-  'Detroit Mercy': 'weak',
-  'UMass Lowell': 'weak',
-  'St. John\'s': 'weak',
-  'St. John\'s (NY)': 'weak',
-  'Hofstra': 'weak',
-  'Binghamton': 'weak',
-  'St. Bonaventure': 'weak',
-  'Bellarmine': 'weak',
-  'Air Force': 'weak',
-  'Hobart': 'weak',
-  'Hobart College': 'weak',
-  'Delaware': 'weak',
-  'Michigan': 'weak',
-  'Quinnipiac': 'weak',
-  'Iona': 'weak',
-  'Manhattan': 'weak',
-  'Mount St. Mary\'s': 'weak',
-  'Mt. St. Mary\'s': 'weak',
-  'Merrimack': 'weak',
-  'Canisius': 'weak',
-  'UMBC': 'weak',
-  'Holy Cross': 'weak',
-  'Siena': 'weak',
-  'Mercyhurst': 'weak',
-};
-
-export function getSOSTier(teamName: string): SOSTierInfo {
-  const tier = SOS_TEAM_MAP[teamName];
-  if (tier) return SOS_TIERS[tier];
-  // Default: average if unknown
-  return SOS_TIERS.average;
+  if (wp >= 0.75 && sm >= 3.0) return SOS_TIERS.elite;
+  if (wp >= 0.65 && sm >= 1.5) return SOS_TIERS.strong;
+  if (wp >= 0.50 && sm >= 0)   return SOS_TIERS.ranked;
+  if (wp >= 0.40)              return SOS_TIERS.above_avg;
+  if (wp >= 0.25)              return SOS_TIERS.average;
+  return SOS_TIERS.weak;
 }
 
 // ─── NORMALIZATION ───
@@ -256,8 +168,8 @@ export function computePowerRating(team: TeamStats, weights: ModelWeights, sosMu
 // ─── MATCHUP PREDICTION ───
 
 export function predictMatchup(teamA: TeamStats, teamB: TeamStats, weights: ModelWeights, useSOS: boolean = true): Prediction {
-  const sosA = useSOS ? getSOSTier(teamA.name).multiplier : 1.0;
-  const sosB = useSOS ? getSOSTier(teamB.name).multiplier : 1.0;
+  const sosA = useSOS ? getSOSTier(teamA).multiplier : 1.0;
+  const sosB = useSOS ? getSOSTier(teamB).multiplier : 1.0;
 
   const ratingA = computePowerRating(teamA, weights, sosA);
   const ratingB = computePowerRating(teamB, weights, sosB);
