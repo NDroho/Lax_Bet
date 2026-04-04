@@ -595,7 +595,7 @@ export default function Dashboard() {
                   {sortedTeams.map(t => <option key={t.name} value={t.name}>{t.name}</option>)}
                 </select>
                 {useSOS && teamAName && (() => {
-                  const tier = getSOSTier(teamAName);
+                  const tier = getSOSTier(teamA);
                   return (
                     <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
                       <span style={{
@@ -622,7 +622,7 @@ export default function Dashboard() {
                   {sortedTeams.map(t => <option key={t.name} value={t.name}>{t.name}</option>)}
                 </select>
                 {useSOS && teamBName && (() => {
-                  const tier = getSOSTier(teamBName);
+                  const tier = getSOSTier(teamB);
                   return (
                     <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
                       <span style={{
