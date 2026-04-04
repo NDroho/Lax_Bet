@@ -594,7 +594,7 @@ export default function Dashboard() {
                 }}>
                   {sortedTeams.map(t => <option key={t.name} value={t.name}>{t.name}</option>)}
                 </select>
-                {useSOS && teamAName && (() => {
+                {useSOS && teamA && (() => {
                   const tier = getSOSTier(teamA);
                   return (
                     <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -621,7 +621,7 @@ export default function Dashboard() {
                 }}>
                   {sortedTeams.map(t => <option key={t.name} value={t.name}>{t.name}</option>)}
                 </select>
-                {useSOS && teamBName && (() => {
+                {useSOS && teamB && (() => {
                   const tier = getSOSTier(teamB);
                   return (
                     <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -789,7 +789,7 @@ export default function Dashboard() {
             {FOOTER_DISCLAIMER}
           </div>
           <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: 12, letterSpacing: 0.5 }}>
-            LAX EDGE v4.1
+            LAX EDGE v5.0
           </div>
         </div>
       </div>
