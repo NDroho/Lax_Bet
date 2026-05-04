@@ -173,9 +173,8 @@ export function predictMatchup(teamA: TeamStats, teamB: TeamStats, weights: Mode
   const ratingB = computePowerRating(teamB, weights, sosB);
   const diff = ratingA - ratingB;
 
-  // v2: spread scalar 0.30 (was 0.25 in v1)
   const rawSpread = diff * SPREAD_SCALAR;
-  const spread = Math.round(rawSpread * 2) / 2;
+  const spread = Math.round(Math.max(-14, Math.min(14, rawSpread)) * 2) / 2;
   const winProbA = 1 / (1 + Math.exp(-diff * 0.15));
 
   const avgOff = (teamA.scoringOff + teamB.scoringOff) / 2;
