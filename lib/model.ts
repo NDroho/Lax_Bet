@@ -69,9 +69,8 @@ export const DEFAULT_WEIGHTS: ModelWeights = {
 };
 
 // ─── SPREAD SCALAR ───
-// Controls how power rating differential converts to point spread.
-// v1 was 0.25, v2 optimized to 0.30.
-const SPREAD_SCALAR = 0.30;
+// v1: 0.25 | v2: 0.30 | v3: 0.38 (backtest May 2026, n=10, avg actual 6.3 vs model 5.0)
+const SPREAD_SCALAR = 0.38;
 
 // ─── SOS TIER SYSTEM ───
 
@@ -84,17 +83,16 @@ export interface SOSTierInfo {
   color: string;
 }
 
-// v2 SOS multipliers — significantly wider gap than v1.
-// Elite teams' stats are boosted 30%, weak teams' stats penalized 35%.
-// This corrects for schedule-inflated stats (e.g. Vermont's faceoff %
-// was earned against America East; Princeton's was earned against Ivy).
+// v3 SOS multipliers — wider gap after May 2026 backtest.
+// Virginia/Penn State (Big Ten) were being underrated vs A10/CAA opponents
+// with inflated stats. Tighter elite threshold + bigger weak penalty fixes this.
 export const SOS_TIERS: Record<SOSTier, SOSTierInfo> = {
-  elite:     { tier: 'elite',     label: 'Elite',     multiplier: 1.300, color: '#22c55e' },
-  strong:    { tier: 'strong',    label: 'Strong',    multiplier: 1.120, color: '#3b82f6' },
-  ranked:    { tier: 'ranked',    label: 'Ranked',    multiplier: 1.045, color: '#8b5cf6' },
-  above_avg: { tier: 'above_avg', label: 'Above Avg', multiplier: 0.930, color: '#eab308' },
-  average:   { tier: 'average',   label: 'Average',   multiplier: 0.825, color: '#a1a1aa' },
-  weak:      { tier: 'weak',      label: 'Weak',      multiplier: 0.650, color: '#ef4444' },
+  elite:     { tier: 'elite',     label: 'Elite',     multiplier: 1.400, color: '#22c55e' },
+  strong:    { tier: 'strong',    label: 'Strong',    multiplier: 1.180, color: '#3b82f6' },
+  ranked:    { tier: 'ranked',    label: 'Ranked',    multiplier: 1.055, color: '#8b5cf6' },
+  above_avg: { tier: 'above_avg', label: 'Above Avg', multiplier: 0.910, color: '#eab308' },
+  average:   { tier: 'average',   label: 'Average',   multiplier: 0.790, color: '#a1a1aa' },
+  weak:      { tier: 'weak',      label: 'Weak',      multiplier: 0.600, color: '#ef4444' },
 };
 
 // ─── DYNAMIC SOS TIER COMPUTATION ───
@@ -113,8 +111,8 @@ export function getSOSTier(team: TeamStats): SOSTierInfo {
   const wp = team.winPct ?? 0;
   const sm = team.scoringMargin ?? 0;
 
-  if (wp >= 0.75 && sm >= 3.0) return SOS_TIERS.elite;
-  if (wp >= 0.65 && sm >= 1.5) return SOS_TIERS.strong;
+  if (wp >= 0.78 && sm >= 4.5) return SOS_TIERS.elite;
+  if (wp >= 0.67 && sm >= 2.0) return SOS_TIERS.strong;
   if (wp >= 0.50 && sm >= 0)   return SOS_TIERS.ranked;
   if (wp >= 0.40)              return SOS_TIERS.above_avg;
   if (wp >= 0.25)              return SOS_TIERS.average;
