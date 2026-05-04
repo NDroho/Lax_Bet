@@ -218,10 +218,14 @@ export default function Dashboard() {
   const [rankings, setRankings] = useState<RankingEntry[]>([]);
   const [alsoConsidered, setAlsoConsidered] = useState<string[]>([]);
   const [rankingsWeek, setRankingsWeek] = useState('');
+  const [rankingsUpdated, setRankingsUpdated] = useState('');
+  const [teamsUpdated, setTeamsUpdated] = useState('');
   const [weights, setWeights] = useState<ModelWeights>(DEFAULT_WEIGHTS);
   const [activeTab, setActiveTab] = useState('slate');
   const [loading, setLoading] = useState(true);
   const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState<'rankings' | 'stats' | null>(null);
+  const [refreshMsg, setRefreshMsg] = useState('');
   const [teamAName, setTeamAName] = useState('');
   const [teamBName, setTeamBName] = useState('');
   const [showWeights, setShowWeights] = useState(false);
@@ -275,6 +279,8 @@ export default function Dashboard() {
         }
         if (schedData.games?.length > 0) setSchedule(schedData.games);
         if (rankData.rankings?.length > 0) { setRankings(rankData.rankings); setAlsoConsidered(rankData.alsoConsidered || []); setRankingsWeek(rankData.weekLabel || ''); }
+        if (rankData.updated) setRankingsUpdated(rankData.updated);
+        if (teamsData.updated) setTeamsUpdated(teamsData.updated);
       } catch (err) { console.error('Failed to load:', err); }
       finally { setLoading(false); }
     }
@@ -291,6 +297,42 @@ export default function Dashboard() {
   function goPrev() { goToDate(shiftDate(selectedDate, -1)); }
   function goNext() { goToDate(shiftDate(selectedDate, 1)); }
   function goToday() { goToDate(getTodayET()); }
+
+  async function handleRefresh(target: 'rankings' | 'stats') {
+    setRefreshing(target);
+    setRefreshMsg('');
+    try {
+      const res = await fetch(`/api/admin/refresh?target=${target}`, { method: 'POST' });
+      const data = await res.json();
+      if (target === 'rankings' && data.rankings?.success) {
+        // Re-fetch rankings from KV
+        const rankRes = await fetch('/api/rankings');
+        const rankData = await rankRes.json();
+        if (rankData.rankings?.length > 0) {
+          setRankings(rankData.rankings);
+          setAlsoConsidered(rankData.alsoConsidered || []);
+          setRankingsWeek(rankData.weekLabel || '');
+          setRankingsUpdated(rankData.updated || '');
+        }
+        setRefreshMsg('Rankings updated successfully');
+      } else if (target === 'stats' && data.stats?.success) {
+        const teamsRes = await fetch('/api/teams');
+        const teamsData = await teamsRes.json();
+        if (teamsData.teams?.length > 0) {
+          setTeams(teamsData.teams);
+          setTeamsUpdated(teamsData.updated || '');
+        }
+        setRefreshMsg(`Stats updated — ${data.stats.teamsCount} teams`);
+      } else {
+        const errDetail = target === 'rankings' ? data.rankings?.error : data.stats?.error;
+        setRefreshMsg(`Refresh failed: ${errDetail || 'unknown error'}`);
+      }
+    } catch (err: any) {
+      setRefreshMsg(`Refresh failed: ${err.message}`);
+    } finally {
+      setRefreshing(null);
+    }
+  }
 
   const sortedTeams = useMemo(() => [...teams].sort((a, b) => a.name.localeCompare(b.name)), [teams]);
   const teamA = teams.find(t => t.name === teamAName);
@@ -427,7 +469,7 @@ export default function Dashboard() {
       {/* TABS */}
       <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
         {tabs.map(tab => (
-          <button key={tab.key} onClick={() => setActiveTab(tab.key)} style={{
+          <button key={tab.key} onClick={() => { setActiveTab(tab.key); setRefreshMsg(''); }} style={{
             flex: 1, padding: '12px', background: activeTab === tab.key ? 'var(--surface)' : 'transparent',
             color: activeTab === tab.key ? 'var(--accent)' : 'var(--text-dim)', border: 'none',
             borderBottom: activeTab === tab.key ? '2px solid var(--accent)' : '2px solid transparent',
@@ -736,10 +778,40 @@ export default function Dashboard() {
         {/* ═══ RANKINGS ═══ */}
         {activeTab === 'rankings' && (
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 16 }}>
-              <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1.5 }}>USA LACROSSE DI MEN'S TOP 20</div>
-              <div style={{ fontSize: 10, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>{rankingsWeek || 'Loading...'}</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, gap: 12, flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1.5 }}>USA LACROSSE DI MEN'S TOP 20</div>
+                <div style={{ fontSize: 10, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>{rankingsWeek || 'Loading...'}</div>
+                {rankingsUpdated && (
+                  <div style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>
+                    Last updated: {new Date(rankingsUpdated).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={() => handleRefresh('rankings')}
+                disabled={refreshing === 'rankings'}
+                style={{
+                  padding: '7px 14px', background: 'var(--surface-2)', border: '1px solid var(--border)',
+                  borderRadius: 6, color: refreshing === 'rankings' ? 'var(--text-muted)' : 'var(--accent)',
+                  fontFamily: 'var(--font-mono)', fontSize: 10, cursor: refreshing === 'rankings' ? 'default' : 'pointer',
+                  letterSpacing: 1, whiteSpace: 'nowrap',
+                }}
+              >
+                {refreshing === 'rankings' ? '...' : '↻ REFRESH'}
+              </button>
             </div>
+            {refreshMsg && (
+              <div style={{
+                marginBottom: 12, padding: '8px 12px', borderRadius: 6, fontSize: 11,
+                fontFamily: 'var(--font-mono)', letterSpacing: 0.5,
+                background: refreshMsg.includes('failed') ? 'rgba(239,68,68,0.1)' : 'rgba(34,197,94,0.1)',
+                color: refreshMsg.includes('failed') ? 'var(--red)' : 'var(--green)',
+                border: `1px solid ${refreshMsg.includes('failed') ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)'}`,
+              }}>
+                {refreshMsg}
+              </div>
+            )}
             {rankings.length === 0 ? (
               <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '40px 20px', textAlign: 'center' }}>
                 <div style={{ fontSize: 14, color: 'var(--text-dim)' }}>Rankings not yet loaded</div>
@@ -777,6 +849,28 @@ export default function Dashboard() {
                 )}
                 <div style={{ marginTop: 12, fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', lineHeight: 1.6 }}>
                   Rankings compiled by USA Lacrosse Magazine staff and contributors with input from coaches.
+                </div>
+                <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                  <div>
+                    <div style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1 }}>TEAM STATS</div>
+                    {teamsUpdated && (
+                      <div style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: 1 }}>
+                        Last updated: {new Date(teamsUpdated).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => handleRefresh('stats')}
+                    disabled={refreshing === 'stats'}
+                    style={{
+                      padding: '6px 12px', background: 'var(--surface-2)', border: '1px solid var(--border)',
+                      borderRadius: 6, color: refreshing === 'stats' ? 'var(--text-muted)' : 'var(--text-dim)',
+                      fontFamily: 'var(--font-mono)', fontSize: 10, cursor: refreshing === 'stats' ? 'default' : 'pointer',
+                      letterSpacing: 1,
+                    }}
+                  >
+                    {refreshing === 'stats' ? 'REFRESHING...' : '↻ REFRESH STATS'}
+                  </button>
                 </div>
               </>
             )}
