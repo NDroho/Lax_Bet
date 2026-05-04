@@ -4,12 +4,11 @@ export const dynamic = 'force-dynamic';
 
 // Calls the cron endpoints server-side so the client never needs the secret
 export async function POST(request: Request) {
-  const { searchParams } = new URL(request.url);
+  const reqUrl = new URL(request.url);
+  const { searchParams } = reqUrl;
   const target = searchParams.get('target'); // 'rankings' | 'stats' | 'all'
 
-  const base = process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : 'http://localhost:3000';
+  const base = `${reqUrl.protocol}//${reqUrl.host}`;
 
   const headers: HeadersInit = process.env.CRON_SECRET
     ? { Authorization: `Bearer ${process.env.CRON_SECRET}` }
