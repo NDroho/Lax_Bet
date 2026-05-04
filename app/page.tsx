@@ -5,6 +5,14 @@ import { TeamStats, ModelWeights, DEFAULT_WEIGHTS, predictMatchup, probToAmerica
 
 interface RankingEntry { rank: number; team: string; record: string; prev: string; }
 
+interface BacktestResult {
+  input: string;
+  team1: string; team2: string; score1: number; score2: number;
+  matched1: string | null; matched2: string | null;
+  predictedSpread: number; actualMargin: number;
+  error: number; directionCorrect: boolean; modelHasData: boolean;
+}
+
 function StatBar({ value, max = 100, color = 'var(--accent)' }: { value: number; max?: number; color?: string }) {
   const pct = Math.min(100, (value / max) * 100);
   return (
@@ -197,6 +205,8 @@ export default function Dashboard() {
   const [useSOS, setUseSOS] = useState(true);
   const [refreshing, setRefreshing] = useState<'rankings' | 'stats' | null>(null);
   const [refreshMsg, setRefreshMsg] = useState('');
+  const [backtestInput, setBacktestInput] = useState('');
+  const [backtestResults, setBacktestResults] = useState<BacktestResult[] | null>(null);
 
   useEffect(() => {
     try {
@@ -292,6 +302,32 @@ export default function Dashboard() {
     } finally {
       setRefreshing(null);
     }
+  }
+
+  function runBacktest() {
+    const lines = backtestInput.split(/[;\n]+/).map(l => l.trim()).filter(Boolean);
+    const results: BacktestResult[] = [];
+    for (const line of lines) {
+      const m = line.match(/^(.+?)\s+(\d+)\s+vs\s+(.+?)\s+(\d+)$/i);
+      if (!m) continue;
+      const [, t1raw, s1, t2raw, s2] = m;
+      const score1 = parseInt(s1), score2 = parseInt(s2);
+      const actualMargin = score1 - score2;
+      const matched1 = findTeamName(t1raw.trim());
+      const matched2 = findTeamName(t2raw.trim());
+      const teamObj1 = matched1 ? teams.find(t => t.name === matched1) : null;
+      const teamObj2 = matched2 ? teams.find(t => t.name === matched2) : null;
+      let predictedSpread = 0;
+      const modelHasData = !!(teamObj1 && teamObj2);
+      if (teamObj1 && teamObj2) {
+        const pred = predictMatchup(teamObj1, teamObj2, weights, useSOS);
+        predictedSpread = pred.spread;
+      }
+      const error = Math.abs(predictedSpread - actualMargin);
+      const directionCorrect = (predictedSpread >= 0 && actualMargin >= 0) || (predictedSpread < 0 && actualMargin < 0);
+      results.push({ input: line, team1: t1raw.trim(), team2: t2raw.trim(), score1, score2, matched1, matched2, predictedSpread, actualMargin, error, directionCorrect, modelHasData });
+    }
+    setBacktestResults(results);
   }
 
   const sortedTeams = useMemo(() => [...teams].sort((a, b) => a.name.localeCompare(b.name)), [teams]);
@@ -410,7 +446,7 @@ export default function Dashboard() {
     </div>
   );
 
-  const tabs = [{ key: 'slate', label: 'Schedule' }, { key: 'predict', label: 'Predictor' }, { key: 'rankings', label: 'Rankings' }];
+  const tabs = [{ key: 'slate', label: 'Schedule' }, { key: 'predict', label: 'Predictor' }, { key: 'rankings', label: 'Rankings' }, { key: 'backtest', label: 'Backtest' }];
 
   // Shared card style
   const card: React.CSSProperties = {
@@ -877,6 +913,143 @@ export default function Dashboard() {
                 </div>
               </>
             )}
+          </div>
+        )}
+
+        {/* ═══ BACKTEST ═══ */}
+        {activeTab === 'backtest' && (
+          <div>
+            <div style={{ marginBottom: 20 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 4px', letterSpacing: -0.3 }}>Model Backtest</h2>
+              <p style={{ fontSize: 13, color: 'var(--text-dim)', margin: 0 }}>
+                Paste game results to see how the model performed. Format: <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, background: 'var(--surface-3)', padding: '1px 6px', borderRadius: 4 }}>Team1 Score vs Team2 Score</span>, one per line or separated by semicolons.
+              </p>
+            </div>
+
+            <div style={{ ...card, padding: 20, marginBottom: 16 }}>
+              <textarea
+                value={backtestInput}
+                onChange={e => setBacktestInput(e.target.value)}
+                placeholder={`Virginia 16 vs UNC 6\nArmy 14 vs Loyola Maryland 7\nPrinceton 19 vs Cornell 9`}
+                rows={6}
+                style={{
+                  width: '100%', padding: '10px 12px', background: 'var(--surface-2)',
+                  border: '1px solid var(--border)', borderRadius: 8, fontSize: 13,
+                  fontFamily: 'var(--font-mono)', color: 'var(--text-primary)',
+                  resize: 'vertical', outline: 'none', lineHeight: 1.6,
+                }}
+              />
+              <div style={{ display: 'flex', gap: 10, marginTop: 12, alignItems: 'center' }}>
+                <button onClick={runBacktest} style={{
+                  padding: '10px 20px', background: 'var(--accent)', color: '#fff',
+                  border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                  cursor: 'pointer', fontFamily: 'var(--font-body)',
+                }}>
+                  Run Backtest
+                </button>
+                {backtestResults && (
+                  <button onClick={() => setBacktestResults(null)} style={{
+                    padding: '10px 16px', background: 'var(--surface-2)', border: '1px solid var(--border)',
+                    borderRadius: 8, fontSize: 13, color: 'var(--text-dim)', cursor: 'pointer', fontFamily: 'var(--font-body)',
+                  }}>
+                    Clear
+                  </button>
+                )}
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Uses current weights & SOS setting</span>
+              </div>
+            </div>
+
+            {backtestResults && (() => {
+              const scored = backtestResults.filter(r => r.modelHasData);
+              const correct = scored.filter(r => r.directionCorrect).length;
+              const mae = scored.length > 0 ? scored.reduce((s, r) => s + r.error, 0) / scored.length : 0;
+              const bias = scored.length > 0 ? scored.reduce((s, r) => s + (r.predictedSpread - r.actualMargin), 0) / scored.length : 0;
+
+              return (
+                <>
+                  {/* Summary cards */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
+                    {[
+                      { label: 'Pick Accuracy', value: scored.length > 0 ? `${correct}/${scored.length}` : '—', sub: scored.length > 0 ? `${Math.round(correct / scored.length * 100)}%` : '', color: correct / scored.length >= 0.7 ? 'var(--green)' : correct / scored.length >= 0.5 ? 'var(--amber)' : 'var(--red)' },
+                      { label: 'Avg Spread Error', value: scored.length > 0 ? `±${mae.toFixed(1)}` : '—', sub: 'mean absolute error', color: mae <= 4 ? 'var(--green)' : mae <= 7 ? 'var(--amber)' : 'var(--red)' },
+                      { label: 'Model Bias', value: scored.length > 0 ? (bias > 0 ? `+${bias.toFixed(1)}` : bias.toFixed(1)) : '—', sub: bias > 0.5 ? 'overestimates favorites' : bias < -0.5 ? 'underestimates favorites' : 'well calibrated', color: Math.abs(bias) <= 1.5 ? 'var(--green)' : Math.abs(bias) <= 3 ? 'var(--amber)' : 'var(--red)' },
+                    ].map((item, i) => (
+                      <div key={i} style={{ ...card, padding: '18px 16px', textAlign: 'center' }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>{item.label}</div>
+                        <div style={{ fontSize: 28, fontWeight: 700, color: item.color, lineHeight: 1, fontFamily: 'var(--font-mono)' }}>{item.value}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 5 }}>{item.sub}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Scalar suggestion */}
+                  {scored.length >= 3 && (() => {
+                    const avgActual = scored.reduce((s, r) => s + Math.abs(r.actualMargin), 0) / scored.length;
+                    const avgPredicted = scored.reduce((s, r) => s + Math.abs(r.predictedSpread), 0) / scored.length;
+                    const ratio = avgActual / (avgPredicted || 1);
+                    const currentScalar = 0.30;
+                    const suggestedScalar = Math.round(currentScalar * ratio * 100) / 100;
+                    if (Math.abs(ratio - 1) > 0.15) {
+                      return (
+                        <div style={{ ...card, padding: '14px 18px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Spread Scalar Suggestion</div>
+                            <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 2 }}>
+                              Model spreads average <strong>{avgPredicted.toFixed(1)} pts</strong> but actuals average <strong>{avgActual.toFixed(1)} pts</strong>. Changing the scalar from <span style={{ fontFamily: 'var(--font-mono)' }}>0.30</span> → <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>{suggestedScalar}</span> would better match this sample.
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+
+                  {/* Results table */}
+                  <div style={{ ...card }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 80px 70px 70px', padding: '10px 16px', borderBottom: '1px solid var(--border)' }}>
+                      {['Matchup', 'Actual', 'Model', 'Error', ''].map((h, i) => (
+                        <span key={i} style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, textAlign: i > 0 ? 'center' : 'left' }}>{h}</span>
+                      ))}
+                    </div>
+                    {backtestResults.map((r, i) => (
+                      <div key={i} style={{
+                        display: 'grid', gridTemplateColumns: '1fr 80px 80px 70px 70px',
+                        padding: '13px 16px', alignItems: 'center',
+                        borderBottom: i < backtestResults.length - 1 ? '1px solid var(--border)' : 'none',
+                        background: !r.modelHasData ? 'rgba(0,0,0,0.02)' : 'transparent',
+                      }}>
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: r.modelHasData ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                            {r.team1} vs {r.team2}
+                          </div>
+                          {!r.modelHasData && (
+                            <div style={{ fontSize: 11, color: 'var(--red)', marginTop: 2 }}>
+                              {!r.matched1 ? `"${r.team1}" not found` : `"${r.team2}" not found`}
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+                          {r.score1}–{r.score2}
+                        </div>
+                        <div style={{ textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 600, color: r.modelHasData ? 'var(--text-dim)' : 'var(--text-muted)' }}>
+                          {r.modelHasData ? (r.predictedSpread === 0 ? 'PK' : `${r.predictedSpread > 0 ? r.team1 : r.team2} -${Math.abs(r.predictedSpread)}`) : '—'}
+                        </div>
+                        <div style={{ textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 600, color: r.modelHasData ? (r.error <= 3 ? 'var(--green)' : r.error <= 6 ? 'var(--amber)' : 'var(--red)') : 'var(--text-muted)' }}>
+                          {r.modelHasData ? `±${r.error.toFixed(1)}` : '—'}
+                        </div>
+                        <div style={{ textAlign: 'center', fontSize: 14 }}>
+                          {r.modelHasData ? (r.directionCorrect ? '✓' : '✗') : ''}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{ marginTop: 10, fontSize: 11, color: 'var(--text-muted)', padding: '0 4px', lineHeight: 1.6 }}>
+                    Note: backtest uses current-season stats, which include results after these games. Treat as calibration, not true out-of-sample validation.
+                  </div>
+                </>
+              );
+            })()}
           </div>
         )}
 
