@@ -1,14 +1,14 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { TeamStats, ModelWeights, DEFAULT_WEIGHTS, computePowerRating, predictMatchup, probToAmericanOdds, getConfidenceTier, SlateGame, getSOSTier, SOS_TIERS } from '@/lib/model';
+import { TeamStats, ModelWeights, DEFAULT_WEIGHTS, predictMatchup, probToAmericanOdds, getConfidenceTier, SlateGame, getSOSTier } from '@/lib/model';
 
 interface RankingEntry { rank: number; team: string; record: string; prev: string; }
 
 function StatBar({ value, max = 100, color = 'var(--accent)' }: { value: number; max?: number; color?: string }) {
   const pct = Math.min(100, (value / max) * 100);
   return (
-    <div style={{ width: '100%', height: 6, background: 'var(--bar-bg)', borderRadius: 3, overflow: 'hidden' }}>
+    <div style={{ width: '100%', height: 5, background: 'var(--bar-bg)', borderRadius: 3, overflow: 'hidden' }}>
       <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 3, transition: 'width 0.5s ease' }} />
     </div>
   );
@@ -16,10 +16,10 @@ function StatBar({ value, max = 100, color = 'var(--accent)' }: { value: number;
 
 function WeightSlider({ label, value, onChange, accent }: { label: string; value: number; onChange: (v: number) => void; accent: string }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-      <span style={{ width: 130, fontSize: 12, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>{label}</span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+      <span style={{ width: 130, fontSize: 13, color: 'var(--text-dim)', fontWeight: 500 }}>{label}</span>
       <input type="range" min={0} max={40} value={value} onChange={e => onChange(parseInt(e.target.value))} style={{ flex: 1, accentColor: accent }} />
-      <span style={{ width: 30, textAlign: 'right', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{value}</span>
+      <span style={{ width: 28, textAlign: 'right', fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{value}</span>
     </div>
   );
 }
@@ -52,7 +52,7 @@ function formatDateDisplay(yyyymmdd: string): string {
   const m = parseInt(yyyymmdd.slice(4, 6)) - 1;
   const d = parseInt(yyyymmdd.slice(6, 8));
   const dt = new Date(y, m, d);
-  return dt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }).toUpperCase();
+  return dt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 }
 
 function isToday(yyyymmdd: string): boolean {
@@ -65,53 +65,53 @@ function DisclaimerPopup({ onAccept }: { onAccept: () => void }) {
   return (
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-      background: 'rgba(0,0,0,0.85)', zIndex: 9999,
+      background: 'rgba(0,0,0,0.4)', zIndex: 9999,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: 20,
+      padding: 20, backdropFilter: 'blur(8px)',
     }}>
       <div style={{
-        background: '#131820', border: '1px solid #2a3344', borderRadius: 12,
-        padding: '32px 28px', maxWidth: 520, width: '100%',
+        background: '#fff', borderRadius: 18,
+        boxShadow: '0 24px 64px rgba(0,0,0,0.18)',
+        padding: '36px 32px', maxWidth: 500, width: '100%',
       }}>
-        <h2 style={{
-          fontFamily: 'var(--font-display)', fontSize: 28, color: 'var(--accent)',
-          letterSpacing: 2, margin: '0 0 6px', lineHeight: 1,
-        }}>LAX EDGE</h2>
-        <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1.5, marginBottom: 20 }}>
-          DISCLAIMER
+        <div style={{ marginBottom: 4, fontSize: 11, fontWeight: 600, color: 'var(--accent)', letterSpacing: 1, textTransform: 'uppercase' }}>
+          Before you continue
         </div>
+        <h2 style={{ fontSize: 26, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 20px', letterSpacing: -0.5 }}>
+          Lax Edge Disclaimer
+        </h2>
 
-        <div style={{ fontSize: 13, color: 'var(--text-dim)', lineHeight: 1.7, marginBottom: 24 }}>
+        <div style={{ fontSize: 14, color: 'var(--text-dim)', lineHeight: 1.75, marginBottom: 28 }}>
           <p style={{ margin: '0 0 12px' }}>
-            All content on this site is provided <strong style={{ color: 'var(--text-primary)' }}>strictly for informational and entertainment purposes only</strong>.
+            All content is provided <strong style={{ color: 'var(--text-primary)', fontWeight: 600 }}>for informational and entertainment purposes only</strong>.
           </p>
           <p style={{ margin: '0 0 12px' }}>
-            LAX EDGE is a <strong style={{ color: 'var(--text-primary)' }}>statistical analysis tool</strong>. All projections and ratings are generated from publicly available NCAA data and are intended solely for informational use.
-          </p>
-          <p style={{ margin: '0 0 12px' }}>
-            Predictions are <strong style={{ color: 'var(--text-primary)' }}>probabilistic estimates</strong> based on historical team performance metrics. They are not guarantees of any outcome and should not be relied upon for any purpose beyond personal informational use.
+            Lax Edge is a <strong style={{ color: 'var(--text-primary)', fontWeight: 600 }}>statistical analysis tool</strong>. All projections are generated from publicly available NCAA data.
           </p>
           <p style={{ margin: 0 }}>
-            By accessing this site, you acknowledge that all content is provided as-is with no warranty of accuracy, and that you assume all responsibility for how you use this information.
+            Predictions are <strong style={{ color: 'var(--text-primary)', fontWeight: 600 }}>probabilistic estimates</strong>, not guarantees. By continuing, you accept full responsibility for how you use this information.
           </p>
         </div>
 
         <button onClick={onAccept} style={{
-          width: '100%', padding: '14px', background: 'var(--accent)', color: '#0a0e14',
-          border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700,
-          fontFamily: 'var(--font-mono)', cursor: 'pointer', letterSpacing: 1.5,
-        }}>
-          I UNDERSTAND — ENTER SITE
+          width: '100%', padding: '14px', background: 'var(--accent)', color: '#fff',
+          border: 'none', borderRadius: 10, fontSize: 15, fontWeight: 600,
+          cursor: 'pointer', letterSpacing: 0, transition: 'opacity 0.15s',
+        }}
+          onMouseEnter={e => (e.currentTarget.style.opacity = '0.85')}
+          onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+        >
+          I understand — Enter site
         </button>
       </div>
     </div>
   );
 }
 
-// ─── INLINE GAME PREDICTION CARD ───
+// ─── GAME CARD ───
 
 function GameCard({
-  game, prediction, favName, underdogName, onClickAnalyze, index, total,
+  game, prediction, favName, onClickAnalyze, index, total,
 }: {
   game: SlateGame;
   prediction: { spread: number; projTotal: number; winProbA: number; confidence: number; mlValue: boolean } | null;
@@ -123,88 +123,53 @@ function GameCard({
 }) {
   const tier = prediction ? getConfidenceTier(prediction.confidence) : null;
   const tierColor = tier === 'STRONG' ? 'var(--green)' : tier === 'LEAN' ? 'var(--amber)' : 'var(--text-muted)';
+  const tierBg = tier === 'STRONG' ? 'rgba(40,167,69,0.1)' : tier === 'LEAN' ? 'rgba(255,149,0,0.1)' : 'rgba(0,0,0,0.05)';
 
   return (
     <div
       onClick={onClickAnalyze}
       style={{
-        padding: '14px 20px',
+        padding: '16px 20px',
         borderBottom: index < total - 1 ? '1px solid var(--border)' : 'none',
-        background: index % 2 === 0 ? 'transparent' : 'var(--surface-2)',
-        cursor: 'pointer', transition: 'background 0.15s',
+        cursor: 'pointer', transition: 'background 0.12s',
+        background: 'transparent',
       }}
-      onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-3)')}
-      onMouseLeave={e => (e.currentTarget.style.background = index % 2 === 0 ? 'transparent' : 'var(--surface-2)')}
+      onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-2)')}
+      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
     >
-      {/* Row 1: Matchup + Time */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: prediction ? 10 : 0 }}>
-        <div>
-          <span style={{ fontWeight: 700, fontSize: 14 }}>{game.away}</span>
-          <span style={{ color: 'var(--text-muted)', margin: '0 8px', fontSize: 12 }}>at</span>
-          <span style={{ fontWeight: 700, fontSize: 14 }}>{game.home}</span>
+        <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>
+          <span>{game.away}</span>
+          <span style={{ color: 'var(--text-muted)', margin: '0 8px', fontWeight: 400, fontSize: 13 }}>at</span>
+          <span>{game.home}</span>
         </div>
         <span style={{ fontSize: 12, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
           {game.time && game.time !== 'TBD' ? game.time : ''}
         </span>
       </div>
 
-      {/* Row 2: Prediction line — spread, total, ML */}
       {prediction && (
-        <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-          {/* Spread */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <span style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1 }}>SPREAD</span>
-            <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--green)' }}>
-              {prediction.spread === 0 ? 'PK' : `${favName} ${prediction.spread > 0 ? -Math.abs(prediction.spread) : -Math.abs(prediction.spread)}`}
-            </span>
-          </div>
-
-          {/* Divider */}
-          <span style={{ color: 'var(--border)', fontSize: 14 }}>|</span>
-
-          {/* Total */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <span style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1 }}>TOTAL</span>
-            <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--amber)' }}>
-              {prediction.projTotal}
-            </span>
-          </div>
-
-          {/* Divider */}
-          <span style={{ color: 'var(--border)', fontSize: 14 }}>|</span>
-
-          {/* ML */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <span style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1 }}>ML</span>
-            <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>
-              {favName} {probToAmericanOdds(Math.max(prediction.winProbA, 1 - prediction.winProbA))}
-            </span>
-          </div>
-
-          {/* Divider */}
-          <span style={{ color: 'var(--border)', fontSize: 14 }}>|</span>
-
-          {/* Confidence tier */}
-          <span style={{
-            fontSize: 9, fontWeight: 700, fontFamily: 'var(--font-mono)', letterSpacing: 1.2,
-            color: tierColor,
-            background: tier === 'STRONG' ? 'rgba(102,187,106,0.12)' : tier === 'LEAN' ? 'rgba(255,202,40,0.12)' : 'rgba(74,85,104,0.12)',
-            padding: '2px 7px', borderRadius: 3,
-          }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 12, color: 'var(--text-dim)', background: 'var(--surface-2)', borderRadius: 6, padding: '3px 8px', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+            {prediction.spread === 0 ? 'PK' : `${favName} ${-Math.abs(prediction.spread)}`}
+          </span>
+          <span style={{ fontSize: 12, color: 'var(--text-dim)', background: 'var(--surface-2)', borderRadius: 6, padding: '3px 8px', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+            O/U {prediction.projTotal}
+          </span>
+          <span style={{ fontSize: 12, color: 'var(--text-dim)', background: 'var(--surface-2)', borderRadius: 6, padding: '3px 8px', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+            {favName} {probToAmericanOdds(Math.max(prediction.winProbA, 1 - prediction.winProbA))}
+          </span>
+          <span style={{ fontSize: 11, fontWeight: 600, color: tierColor, background: tierBg, padding: '3px 8px', borderRadius: 6 }}>
             {tier}
           </span>
-
           {prediction.mlValue && (
-            <span style={{ fontSize: 9, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--green)', letterSpacing: 1 }}>★ VALUE</span>
+            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--green)' }}>★ Value</span>
           )}
         </div>
       )}
 
-      {/* No prediction available */}
       {!prediction && (
-        <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: 4 }}>
-          No model data available
-        </div>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>No model data available</div>
       )}
     </div>
   );
@@ -224,16 +189,15 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState('slate');
   const [loading, setLoading] = useState(true);
   const [scheduleLoading, setScheduleLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState<'rankings' | 'stats' | null>(null);
-  const [refreshMsg, setRefreshMsg] = useState('');
   const [teamAName, setTeamAName] = useState('');
   const [teamBName, setTeamBName] = useState('');
   const [showWeights, setShowWeights] = useState(false);
   const [disclaimerAccepted, setDisclaimerAccepted] = useState(false);
   const [selectedDate, setSelectedDate] = useState(getTodayET());
   const [useSOS, setUseSOS] = useState(true);
+  const [refreshing, setRefreshing] = useState<'rankings' | 'stats' | null>(null);
+  const [refreshMsg, setRefreshMsg] = useState('');
 
-  // Check if disclaimer was already accepted this session
   useEffect(() => {
     try {
       if (sessionStorage.getItem('lax-edge-disclaimer') === 'accepted') {
@@ -247,7 +211,6 @@ export default function Dashboard() {
     try { sessionStorage.setItem('lax-edge-disclaimer', 'accepted'); } catch {}
   }
 
-  // Fetch schedule for a specific date
   const fetchSchedule = useCallback(async (date: string) => {
     setScheduleLoading(true);
     try {
@@ -262,7 +225,6 @@ export default function Dashboard() {
     }
   }, []);
 
-  // Initial data load
   useEffect(() => {
     async function loadData() {
       try {
@@ -278,7 +240,11 @@ export default function Dashboard() {
           if (teamsData.teams.length > 1) setTeamBName(teamsData.teams[1]?.name || '');
         }
         if (schedData.games?.length > 0) setSchedule(schedData.games);
-        if (rankData.rankings?.length > 0) { setRankings(rankData.rankings); setAlsoConsidered(rankData.alsoConsidered || []); setRankingsWeek(rankData.weekLabel || ''); }
+        if (rankData.rankings?.length > 0) {
+          setRankings(rankData.rankings);
+          setAlsoConsidered(rankData.alsoConsidered || []);
+          setRankingsWeek(rankData.weekLabel || '');
+        }
         if (rankData.updated) setRankingsUpdated(rankData.updated);
         if (teamsData.updated) setTeamsUpdated(teamsData.updated);
       } catch (err) { console.error('Failed to load:', err); }
@@ -288,12 +254,7 @@ export default function Dashboard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Date navigation
-  function goToDate(date: string) {
-    setSelectedDate(date);
-    fetchSchedule(date);
-  }
-
+  function goToDate(date: string) { setSelectedDate(date); fetchSchedule(date); }
   function goPrev() { goToDate(shiftDate(selectedDate, -1)); }
   function goNext() { goToDate(shiftDate(selectedDate, 1)); }
   function goToday() { goToDate(getTodayET()); }
@@ -305,7 +266,6 @@ export default function Dashboard() {
       const res = await fetch(`/api/admin/refresh?target=${target}`, { method: 'POST' });
       const data = await res.json();
       if (target === 'rankings' && data.rankings?.success) {
-        // Re-fetch rankings from KV
         const rankRes = await fetch('/api/rankings');
         const rankData = await rankRes.json();
         if (rankData.rankings?.length > 0) {
@@ -340,7 +300,6 @@ export default function Dashboard() {
   const prediction = useMemo(() => teamA && teamB ? predictMatchup(teamA, teamB, weights, useSOS) : null, [teamA, teamB, weights, useSOS]);
   const updateWeight = useCallback((key: string, val: number) => setWeights(prev => ({ ...prev, [key]: val })), []);
 
-  // Match ESPN team names to stats team names (fuzzy match)
   const findTeamName = useCallback((espnName: string): string | null => {
     if (!espnName) return null;
     const lower = espnName.toLowerCase();
@@ -420,7 +379,6 @@ export default function Dashboard() {
     return null;
   }, [teams]);
 
-  // Compute predictions for all schedule games
   const schedulePredictions = useMemo(() => {
     return schedule.map(game => {
       const awayName = findTeamName(game.away);
@@ -446,148 +404,183 @@ export default function Dashboard() {
     setActiveTab('predict');
   }
 
-  if (loading) return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>Loading LAX EDGE...</div>;
+  if (loading) return (
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', color: 'var(--text-dim)', fontSize: 14 }}>
+      Loading...
+    </div>
+  );
 
-  const tabs = [{ key: 'slate', label: 'SCHEDULE' }, { key: 'predict', label: 'PREDICTOR' }, { key: 'rankings', label: 'RANKINGS' }];
+  const tabs = [{ key: 'slate', label: 'Schedule' }, { key: 'predict', label: 'Predictor' }, { key: 'rankings', label: 'Rankings' }];
 
-  const FOOTER_DISCLAIMER = 'For informational and entertainment purposes only. All predictions are probabilistic estimates based on publicly available NCAA data and are not guarantees of any outcome. Content is provided as-is with no warranty of accuracy.';
+  // Shared card style
+  const card: React.CSSProperties = {
+    background: 'var(--surface)',
+    borderRadius: 'var(--radius)',
+    boxShadow: 'var(--shadow)',
+    overflow: 'hidden',
+  };
+
+  const selectStyle: React.CSSProperties = {
+    width: '100%', marginTop: 6, padding: '11px 36px 11px 14px',
+    background: 'var(--surface)', color: 'var(--text-primary)',
+    border: '1px solid var(--border)', borderRadius: 10,
+    fontSize: 15, fontWeight: 600, fontFamily: 'var(--font-body)',
+    boxShadow: 'var(--shadow)', cursor: 'pointer',
+  };
 
   return (
-    <div>
-      {/* Disclaimer popup */}
+    <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
       {!disclaimerAccepted && <DisclaimerPopup onAccept={handleAcceptDisclaimer} />}
 
-      {/* HEADER */}
-      <div style={{ background: 'linear-gradient(135deg, #0d1420 0%, #162030 50%, #0d1825 100%)', borderBottom: '1px solid var(--border)', padding: '20px 24px 16px' }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 36, letterSpacing: 2, color: 'var(--accent)', margin: 0, lineHeight: 1 }}>LAX EDGE</h1>
-          <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>NCAA D1 MEN'S LACROSSE</span>
+      {/* ─── HEADER ─── */}
+      <div style={{ background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(20px)', borderBottom: '1px solid var(--border)', padding: '16px 32px', position: 'sticky', top: 0, zIndex: 200 }}>
+        <div style={{ maxWidth: 960, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', margin: 0, letterSpacing: -0.3 }}>
+              Lax Edge
+            </h1>
+            <p style={{ margin: 0, fontSize: 12, color: 'var(--text-dim)', fontWeight: 400 }}>
+              NCAA D1 Men's Lacrosse Analytics
+            </p>
+          </div>
         </div>
-        <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--text-dim)' }}>Matchup predictor & schedule</p>
       </div>
 
-      {/* TABS */}
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
-        {tabs.map(tab => (
-          <button key={tab.key} onClick={() => { setActiveTab(tab.key); setRefreshMsg(''); }} style={{
-            flex: 1, padding: '12px', background: activeTab === tab.key ? 'var(--surface)' : 'transparent',
-            color: activeTab === tab.key ? 'var(--accent)' : 'var(--text-dim)', border: 'none',
-            borderBottom: activeTab === tab.key ? '2px solid var(--accent)' : '2px solid transparent',
-            fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: 1.5, cursor: 'pointer',
-          }}>{tab.label}</button>
-        ))}
+      {/* ─── TABS ─── */}
+      <div style={{ background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(20px)', borderBottom: '1px solid var(--border)' }}>
+        <div style={{ maxWidth: 960, margin: '0 auto', display: 'flex' }}>
+          {tabs.map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => { setActiveTab(tab.key); setRefreshMsg(''); }}
+              style={{
+                padding: '13px 24px', background: 'transparent', border: 'none',
+                borderBottom: activeTab === tab.key ? '2px solid var(--accent)' : '2px solid transparent',
+                color: activeTab === tab.key ? 'var(--accent)' : 'var(--text-dim)',
+                fontSize: 14, fontWeight: 500, fontFamily: 'var(--font-body)',
+                cursor: 'pointer', transition: 'color 0.15s', letterSpacing: 0,
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div style={{ padding: '20px 24px', maxWidth: 900, margin: '0 auto' }}>
+      {/* ─── CONTENT ─── */}
+      <div style={{ maxWidth: 960, margin: '0 auto', padding: '28px 24px 60px' }}>
 
         {/* ═══ SCHEDULE ═══ */}
         {activeTab === 'slate' && (
           <div>
-            {/* SOS Toggle for Schedule */}
+            {/* SOS toggle */}
             <div style={{
+              ...card, marginBottom: 16, padding: '12px 18px',
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '8px 16px', background: useSOS ? 'rgba(34,197,94,0.08)' : 'var(--surface)',
-              border: `1px solid ${useSOS ? 'rgba(34,197,94,0.3)' : 'var(--border)'}`,
-              borderRadius: 8, marginBottom: 12, transition: 'all 0.2s',
             }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: useSOS ? '#22c55e' : 'var(--text-dim)', fontFamily: 'var(--font-mono)', letterSpacing: 1 }}>
-                SOS {useSOS ? 'ON' : 'OFF'}
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+                  Strength of Schedule Adjustment
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 1 }}>
+                  {useSOS ? 'Stats adjusted for opponent quality' : 'Raw stats only'}
+                </div>
               </div>
               <div
                 onClick={() => setUseSOS(!useSOS)}
                 style={{
-                  width: 38, height: 20, borderRadius: 10, cursor: 'pointer',
-                  background: useSOS ? '#22c55e' : 'var(--surface-3)',
-                  border: `1px solid ${useSOS ? '#22c55e' : 'var(--border)'}`,
-                  position: 'relative', transition: 'all 0.2s', flexShrink: 0,
+                  width: 44, height: 26, borderRadius: 13, cursor: 'pointer',
+                  background: useSOS ? 'var(--accent)' : 'var(--bar-bg)',
+                  position: 'relative', transition: 'background 0.2s', flexShrink: 0,
                 }}
               >
                 <div style={{
-                  width: 14, height: 14, borderRadius: 7,
-                  background: '#fff', position: 'absolute', top: 2,
-                  left: useSOS ? 20 : 2, transition: 'left 0.2s',
+                  width: 20, height: 20, borderRadius: 10, background: '#fff',
+                  position: 'absolute', top: 3,
+                  left: useSOS ? 21 : 3, transition: 'left 0.2s',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.2)',
                 }} />
               </div>
             </div>
 
             {/* Date navigation */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
               <button onClick={goPrev} style={{
-                background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6,
-                color: 'var(--text-primary)', fontSize: 18, padding: '6px 14px', cursor: 'pointer',
-                fontFamily: 'var(--font-mono)', lineHeight: 1,
-              }}>◀</button>
+                background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8,
+                color: 'var(--text-primary)', fontSize: 16, padding: '8px 14px', cursor: 'pointer',
+                boxShadow: 'var(--shadow)', fontFamily: 'var(--font-body)', lineHeight: 1,
+              }}>‹</button>
 
-              <div style={{ textAlign: 'center', flex: 1 }}>
-                <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1.5 }}>
-                  {formatDateDisplay(selectedDate)} — {scheduleLoading ? '...' : `${schedule.length} GAME${schedule.length !== 1 ? 'S' : ''}`}
+              <div style={{ flex: 1, textAlign: 'center' }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
+                  {formatDateDisplay(selectedDate)}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 2 }}>
+                  {scheduleLoading ? 'Loading...' : `${schedule.length} game${schedule.length !== 1 ? 's' : ''}`}
                 </div>
                 {!isToday(selectedDate) && (
                   <button onClick={goToday} style={{
-                    background: 'none', border: 'none', color: 'var(--accent)', fontSize: 10,
-                    fontFamily: 'var(--font-mono)', cursor: 'pointer', marginTop: 4, letterSpacing: 1,
-                    textDecoration: 'underline', padding: 0,
+                    background: 'none', border: 'none', color: 'var(--accent)', fontSize: 12,
+                    cursor: 'pointer', marginTop: 2, padding: 0, fontFamily: 'var(--font-body)', fontWeight: 500,
                   }}>
-                    BACK TO TODAY
+                    Back to today
                   </button>
                 )}
               </div>
 
               <button onClick={goNext} style={{
-                background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6,
-                color: 'var(--text-primary)', fontSize: 18, padding: '6px 14px', cursor: 'pointer',
-                fontFamily: 'var(--font-mono)', lineHeight: 1,
-              }}>▶</button>
+                background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8,
+                color: 'var(--text-primary)', fontSize: 16, padding: '8px 14px', cursor: 'pointer',
+                boxShadow: 'var(--shadow)', fontFamily: 'var(--font-body)', lineHeight: 1,
+              }}>›</button>
             </div>
 
-            {/* Loading state */}
             {scheduleLoading && (
-              <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '40px 20px', textAlign: 'center' }}>
+              <div style={{ ...card, padding: '40px 20px', textAlign: 'center' }}>
                 <div style={{ fontSize: 14, color: 'var(--text-dim)' }}>Loading schedule...</div>
               </div>
             )}
 
-            {/* No games */}
             {!scheduleLoading && schedule.length === 0 && (
-              <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '40px 20px', textAlign: 'center' }}>
-                <div style={{ fontSize: 14, color: 'var(--text-dim)', marginBottom: 8 }}>No games scheduled</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>Try navigating to a different date or use the Predictor tab</div>
+              <div style={{ ...card, padding: '48px 20px', textAlign: 'center' }}>
+                <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>No games today</div>
+                <div style={{ fontSize: 13, color: 'var(--text-dim)' }}>Try a different date or use the Predictor tab</div>
               </div>
             )}
 
-            {/* Games list */}
             {!scheduleLoading && schedule.length > 0 && (
-              <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 20px', borderBottom: '1px solid var(--border)', fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', letterSpacing: 1.2 }}>
-                  <span>MATCHUP & LAX EDGE LINE {useSOS && <span style={{ color: '#22c55e', marginLeft: 4 }}>· SOS ADJ</span>} <span style={{ color: 'var(--accent)', marginLeft: 8, letterSpacing: 0.5 }}>click to analyze</span></span>
+              <>
+                <div style={{ ...card }}>
+                  <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-dim)' }}>
+                      Matchup & Lax Edge Line {useSOS && <span style={{ color: 'var(--accent)' }}>· SOS</span>}
+                    </span>
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Tap to analyze</span>
+                  </div>
+                  {schedule.map((g, i) => {
+                    const sp = schedulePredictions[i];
+                    return (
+                      <GameCard
+                        key={i} game={g}
+                        prediction={sp?.prediction || null}
+                        favName={sp?.favName || ''}
+                        underdogName={sp?.underdogName || ''}
+                        onClickAnalyze={() => handleSlateClick(g.away, g.home)}
+                        index={i} total={schedule.length}
+                      />
+                    );
+                  })}
                 </div>
-                {schedule.map((g, i) => {
-                  const sp = schedulePredictions[i];
-                  return (
-                    <GameCard
-                      key={i}
-                      game={g}
-                      prediction={sp?.prediction || null}
-                      favName={sp?.favName || ''}
-                      underdogName={sp?.underdogName || ''}
-                      onClickAnalyze={() => handleSlateClick(g.away, g.home)}
-                      index={i}
-                      total={schedule.length}
-                    />
-                  );
-                })}
-              </div>
-            )}
 
-            {/* Legend */}
-            {!scheduleLoading && schedule.length > 0 && (
-              <div style={{ marginTop: 12, padding: '10px 16px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'center' }}>
-                <span style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1.2 }}>CONFIDENCE:</span>
-                <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--green)', fontWeight: 700 }}>STRONG</span>
-                <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--amber)', fontWeight: 700 }}>LEAN</span>
-                <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', fontWeight: 700 }}>TOSS-UP</span>
-                <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--green)' }}>★ VALUE = strong ML edge</span>
-              </div>
+                {/* Legend */}
+                <div style={{ marginTop: 12, display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center', padding: '0 4px' }}>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Confidence:</span>
+                  <span style={{ fontSize: 12, color: 'var(--green)', fontWeight: 600 }}>Strong</span>
+                  <span style={{ fontSize: 12, color: 'var(--amber)', fontWeight: 600 }}>Lean</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Toss-up</span>
+                  <span style={{ fontSize: 12, color: 'var(--green)' }}>★ Value = strong ML edge</span>
+                </div>
+              </>
             )}
           </div>
         )}
@@ -595,88 +588,71 @@ export default function Dashboard() {
         {/* ═══ PREDICTOR ═══ */}
         {activeTab === 'predict' && (
           <div>
-            {/* SOS Toggle */}
+            {/* SOS toggle */}
             <div style={{
+              ...card, marginBottom: 20, padding: '12px 18px',
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '10px 16px', background: useSOS ? 'rgba(34,197,94,0.08)' : 'var(--surface)',
-              border: `1px solid ${useSOS ? 'rgba(34,197,94,0.3)' : 'var(--border)'}`,
-              borderRadius: 8, marginBottom: 16, transition: 'all 0.2s',
             }}>
               <div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: useSOS ? '#22c55e' : 'var(--text-dim)', fontFamily: 'var(--font-mono)', letterSpacing: 1 }}>
-                  SOS ADJUSTMENT
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+                  Strength of Schedule Adjustment
                 </div>
-                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
-                  {useSOS ? 'Adjusting stats for strength of schedule' : 'Raw stats only — no schedule adjustment'}
+                <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 1 }}>
+                  {useSOS ? 'Stats adjusted for opponent quality' : 'Raw stats only'}
                 </div>
               </div>
               <div
                 onClick={() => setUseSOS(!useSOS)}
                 style={{
-                  width: 44, height: 24, borderRadius: 12, cursor: 'pointer',
-                  background: useSOS ? '#22c55e' : 'var(--surface-3)',
-                  border: `1px solid ${useSOS ? '#22c55e' : 'var(--border)'}`,
-                  position: 'relative', transition: 'all 0.2s', flexShrink: 0,
+                  width: 44, height: 26, borderRadius: 13, cursor: 'pointer',
+                  background: useSOS ? 'var(--accent)' : 'var(--bar-bg)',
+                  position: 'relative', transition: 'background 0.2s', flexShrink: 0,
                 }}
               >
                 <div style={{
-                  width: 18, height: 18, borderRadius: 9,
-                  background: '#fff', position: 'absolute', top: 2,
-                  left: useSOS ? 22 : 2, transition: 'left 0.2s',
+                  width: 20, height: 20, borderRadius: 10, background: '#fff',
+                  position: 'absolute', top: 3,
+                  left: useSOS ? 21 : 3, transition: 'left 0.2s',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.2)',
                 }} />
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 16, alignItems: 'center', marginBottom: 24 }}>
+            {/* Team selectors */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 16, alignItems: 'start', marginBottom: 24 }}>
               <div>
-                <label style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1 }}>TEAM A</label>
-                <select value={teamAName} onChange={e => setTeamAName(e.target.value)} style={{
-                  width: '100%', marginTop: 4, padding: '10px 12px', background: 'var(--surface-2)', color: 'var(--text-primary)',
-                  border: '1px solid var(--border)', borderRadius: 6, fontSize: 15, fontWeight: 700,
-                }}>
+                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Away Team</label>
+                <select value={teamAName} onChange={e => setTeamAName(e.target.value)} style={selectStyle}>
                   {sortedTeams.map(t => <option key={t.name} value={t.name}>{t.name}</option>)}
                 </select>
                 {useSOS && teamA && (() => {
                   const tier = getSOSTier(teamA);
                   return (
                     <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{
-                        fontSize: 9, fontWeight: 700, fontFamily: 'var(--font-mono)',
-                        color: tier.color, background: tier.color + '18',
-                        padding: '2px 8px', borderRadius: 4, letterSpacing: 1,
-                      }}>
-                        {tier.label.toUpperCase()}
+                      <span style={{ fontSize: 11, fontWeight: 600, color: tier.color, background: tier.color + '18', padding: '2px 8px', borderRadius: 5 }}>
+                        {tier.label}
                       </span>
-                      <span style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                        {tier.multiplier}x
-                      </span>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{tier.multiplier}×</span>
                     </div>
                   );
                 })()}
               </div>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, color: 'var(--text-muted)', marginTop: 16 }}>VS</div>
+
+              <div style={{ fontSize: 18, color: 'var(--text-muted)', fontWeight: 500, marginTop: 28, userSelect: 'none' }}>vs</div>
+
               <div>
-                <label style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1 }}>TEAM B</label>
-                <select value={teamBName} onChange={e => setTeamBName(e.target.value)} style={{
-                  width: '100%', marginTop: 4, padding: '10px 12px', background: 'var(--surface-2)', color: 'var(--text-primary)',
-                  border: '1px solid var(--border)', borderRadius: 6, fontSize: 15, fontWeight: 700,
-                }}>
+                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Home Team</label>
+                <select value={teamBName} onChange={e => setTeamBName(e.target.value)} style={selectStyle}>
                   {sortedTeams.map(t => <option key={t.name} value={t.name}>{t.name}</option>)}
                 </select>
                 {useSOS && teamB && (() => {
                   const tier = getSOSTier(teamB);
                   return (
                     <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{
-                        fontSize: 9, fontWeight: 700, fontFamily: 'var(--font-mono)',
-                        color: tier.color, background: tier.color + '18',
-                        padding: '2px 8px', borderRadius: 4, letterSpacing: 1,
-                      }}>
-                        {tier.label.toUpperCase()}
+                      <span style={{ fontSize: 11, fontWeight: 600, color: tier.color, background: tier.color + '18', padding: '2px 8px', borderRadius: 5 }}>
+                        {tier.label}
                       </span>
-                      <span style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                        {tier.multiplier}x
-                      </span>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{tier.multiplier}×</span>
                     </div>
                   );
                 })()}
@@ -685,46 +661,50 @@ export default function Dashboard() {
 
             {prediction && teamA && teamB && (
               <>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 20 }}>
-                  <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '18px 16px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1.5, marginBottom: 8 }}>SPREAD</div>
-                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, lineHeight: 1, color: prediction.spread !== 0 ? 'var(--green)' : 'var(--text-primary)' }}>
-                      {prediction.spread > 0 ? `${teamAName} -${Math.abs(prediction.spread)}` : prediction.spread < 0 ? `${teamBName} -${Math.abs(prediction.spread)}` : 'PICK'}
+                {/* Key numbers */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
+                  {[
+                    {
+                      label: 'Spread',
+                      value: prediction.spread > 0 ? `${teamAName} -${Math.abs(prediction.spread)}` : prediction.spread < 0 ? `${teamBName} -${Math.abs(prediction.spread)}` : 'Pick',
+                      sub: prediction.spread !== 0 ? `${prediction.spread > 0 ? teamAName : teamBName} favored` : 'Even matchup',
+                      color: 'var(--green)',
+                    },
+                    {
+                      label: 'Total',
+                      value: String(prediction.projTotal),
+                      sub: `${Math.round(prediction.projTotal / 2 + Math.abs(prediction.spread) / 2)}–${Math.round(prediction.projTotal / 2 - Math.abs(prediction.spread) / 2)} proj`,
+                      color: 'var(--amber)',
+                    },
+                    {
+                      label: 'Win Probability',
+                      value: `${Math.round(Math.max(prediction.winProbA, 1 - prediction.winProbA) * 100)}%`,
+                      sub: `${prediction.winProbA >= 0.5 ? teamAName : teamBName} ${probToAmericanOdds(Math.max(prediction.winProbA, 1 - prediction.winProbA))}${prediction.mlValue ? ' ★' : ''}`,
+                      color: 'var(--accent)',
+                    },
+                  ].map((item, i) => (
+                    <div key={i} style={{ ...card, padding: '20px 18px', textAlign: 'center' }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>{item.label}</div>
+                      <div style={{ fontSize: 26, fontWeight: 700, color: item.color, lineHeight: 1, fontFamily: 'var(--font-mono)', letterSpacing: -0.5 }}>{item.value}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 6 }}>{item.sub}</div>
                     </div>
-                    <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 6 }}>
-                      {prediction.spread !== 0 ? `${prediction.spread > 0 ? teamAName : teamBName} favored` : 'Even matchup'}
-                    </div>
-                  </div>
-                  <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '18px 16px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1.5, marginBottom: 8 }}>PROJECTED TOTAL</div>
-                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 38, lineHeight: 1, color: 'var(--amber)' }}>{prediction.projTotal}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 6 }}>
-                      {Math.round(prediction.projTotal / 2 + Math.abs(prediction.spread) / 2)}-{Math.round(prediction.projTotal / 2 - Math.abs(prediction.spread) / 2)} proj score
-                    </div>
-                  </div>
-                  <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '18px 16px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1.5, marginBottom: 8 }}>WIN PROB</div>
-                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 38, lineHeight: 1, color: 'var(--accent)' }}>
-                      {Math.round(Math.max(prediction.winProbA, 1 - prediction.winProbA) * 100)}%
-                    </div>
-                    <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 6 }}>
-                      {prediction.winProbA >= 0.5 ? teamAName : teamBName}
-                      <span style={{ marginLeft: 6, fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--accent)' }}>
-                        {probToAmericanOdds(Math.max(prediction.winProbA, 1 - prediction.winProbA))}
-                      </span>
-                      {prediction.mlValue && <span style={{ color: 'var(--green)', marginLeft: 6, fontWeight: 700 }}>★ ML VALUE</span>}
-                    </div>
-                  </div>
+                  ))}
                 </div>
 
-                <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 16 }}>
-                  <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1.5, whiteSpace: 'nowrap' }}>CONFIDENCE</span>
-                  <div style={{ flex: 1 }}><StatBar value={prediction.confidence} max={100} color={prediction.confidence > 70 ? 'var(--green)' : prediction.confidence > 50 ? 'var(--amber)' : 'var(--red)'} /></div>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 700 }}>{prediction.confidence}%</span>
+                {/* Confidence */}
+                <div style={{ ...card, padding: '14px 18px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 14 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-dim)', whiteSpace: 'nowrap' }}>Confidence</span>
+                  <div style={{ flex: 1 }}>
+                    <StatBar value={prediction.confidence} max={100} color={prediction.confidence > 70 ? 'var(--green)' : prediction.confidence > 50 ? 'var(--amber)' : 'var(--red)'} />
+                  </div>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{prediction.confidence}%</span>
                 </div>
 
-                <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '16px 20px', marginBottom: 20 }}>
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1.5, marginBottom: 14 }}>HEAD-TO-HEAD STAT COMPARISON</div>
+                {/* Head to head */}
+                <div style={{ ...card, padding: '20px 20px', marginBottom: 20 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 16 }}>
+                    Head-to-Head Stats
+                  </div>
                   {[
                     { label: 'Face-Off Win %', a: teamA.foWin, b: teamB.foWin, fmt: (v: number) => (v * 100).toFixed(1) + '%' },
                     { label: 'Shot %', a: teamA.shotPct, b: teamB.shotPct, fmt: (v: number) => (v * 100).toFixed(1) + '%' },
@@ -738,11 +718,11 @@ export default function Dashboard() {
                     const aWins = row.invert ? row.a < row.b : row.a > row.b;
                     const bWins = row.invert ? row.b < row.a : row.b > row.a;
                     return (
-                      <div key={i} style={{ display: 'grid', gridTemplateColumns: '80px 1fr 110px 1fr 80px', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <div key={i} style={{ display: 'grid', gridTemplateColumns: '72px 1fr 110px 1fr 72px', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                         <span style={{ textAlign: 'right', fontSize: 13, fontFamily: 'var(--font-mono)', fontWeight: 700, color: aWins ? 'var(--green)' : 'var(--text-dim)' }}>{row.fmt(row.a)}</span>
-                        <div style={{ height: 4, borderRadius: 2, background: aWins ? 'var(--green)' : 'var(--bar-bg)', opacity: aWins ? 0.6 : 0.3 }} />
-                        <span style={{ textAlign: 'center', fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{row.label}</span>
-                        <div style={{ height: 4, borderRadius: 2, background: bWins ? 'var(--green)' : 'var(--bar-bg)', opacity: bWins ? 0.6 : 0.3 }} />
+                        <div style={{ height: 3, borderRadius: 2, background: aWins ? 'var(--green)' : 'var(--bar-bg)', opacity: aWins ? 0.7 : 1 }} />
+                        <span style={{ textAlign: 'center', fontSize: 11, color: 'var(--text-dim)', fontWeight: 500 }}>{row.label}</span>
+                        <div style={{ height: 3, borderRadius: 2, background: bWins ? 'var(--green)' : 'var(--bar-bg)', opacity: bWins ? 0.7 : 1 }} />
                         <span style={{ textAlign: 'left', fontSize: 13, fontFamily: 'var(--font-mono)', fontWeight: 700, color: bWins ? 'var(--green)' : 'var(--text-dim)' }}>{row.fmt(row.b)}</span>
                       </div>
                     );
@@ -751,25 +731,33 @@ export default function Dashboard() {
               </>
             )}
 
+            {/* Weight sliders */}
             <button onClick={() => setShowWeights(!showWeights)} style={{
-              background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 16px', width: '100%',
-              color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: 11, cursor: 'pointer', letterSpacing: 1,
+              background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10,
+              padding: '12px 18px', width: '100%', color: 'var(--text-dim)',
+              fontSize: 13, fontWeight: 500, cursor: 'pointer', textAlign: 'left',
+              boxShadow: 'var(--shadow)', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              fontFamily: 'var(--font-body)',
             }}>
-              {showWeights ? '▾ HIDE' : '▸ SHOW'} MODEL WEIGHTS
+              <span>Model Weights</span>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{showWeights ? 'Hide' : 'Show'}</span>
             </button>
             {showWeights && (
-              <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '16px 20px', marginTop: 12 }}>
+              <div style={{ ...card, padding: '20px 20px', marginTop: 8 }}>
                 <WeightSlider label="Face-Off %" value={weights.faceOff} onChange={v => updateWeight('faceOff', v)} accent="var(--accent)" />
-                <WeightSlider label="Clear %" value={weights.clearPct} onChange={v => updateWeight('clearPct', v)} accent="#81d4fa" />
+                <WeightSlider label="Clear %" value={weights.clearPct} onChange={v => updateWeight('clearPct', v)} accent="#5ac8fa" />
                 <WeightSlider label="Shot %" value={weights.shotPct} onChange={v => updateWeight('shotPct', v)} accent="var(--green)" />
                 <WeightSlider label="TO Margin" value={weights.turnoverMargin} onChange={v => updateWeight('turnoverMargin', v)} accent="var(--amber)" />
                 <WeightSlider label="Save %" value={weights.savePct} onChange={v => updateWeight('savePct', v)} accent="var(--red)" />
-                <WeightSlider label="Def Eff" value={weights.defEff} onChange={v => updateWeight('defEff', v)} accent="#80cbc4" />
-                <WeightSlider label="EMO" value={weights.emo} onChange={v => updateWeight('emo', v)} accent="#ce93d8" />
+                <WeightSlider label="Def Efficiency" value={weights.defEff} onChange={v => updateWeight('defEff', v)} accent="#30d158" />
+                <WeightSlider label="EMO" value={weights.emo} onChange={v => updateWeight('emo', v)} accent="#bf5af2" />
                 <button onClick={() => setWeights(DEFAULT_WEIGHTS)} style={{
-                  marginTop: 8, padding: '6px 14px', background: 'var(--surface-3)', border: '1px solid var(--border)',
-                  borderRadius: 5, color: 'var(--text-dim)', fontSize: 11, fontFamily: 'var(--font-mono)', cursor: 'pointer',
-                }}>RESET DEFAULTS</button>
+                  marginTop: 10, padding: '8px 16px', background: 'var(--surface-2)', border: '1px solid var(--border)',
+                  borderRadius: 8, color: 'var(--text-dim)', fontSize: 12, fontFamily: 'var(--font-body)',
+                  fontWeight: 500, cursor: 'pointer',
+                }}>
+                  Reset to defaults
+                </button>
               </div>
             )}
           </div>
@@ -778,13 +766,16 @@ export default function Dashboard() {
         {/* ═══ RANKINGS ═══ */}
         {activeTab === 'rankings' && (
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, gap: 12, flexWrap: 'wrap' }}>
+            {/* Header row */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, gap: 12, flexWrap: 'wrap' }}>
               <div>
-                <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1.5 }}>USA LACROSSE DI MEN'S TOP 20</div>
-                <div style={{ fontSize: 10, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>{rankingsWeek || 'Loading...'}</div>
+                <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 2px', letterSpacing: -0.3 }}>
+                  USA Lacrosse Top 20
+                </h2>
+                <div style={{ fontSize: 13, color: 'var(--text-dim)' }}>{rankingsWeek || 'Men\'s Division I'}</div>
                 {rankingsUpdated && (
-                  <div style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>
-                    Last updated: {new Date(rankingsUpdated).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                    Updated {new Date(rankingsUpdated).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
                   </div>
                 )}
               </div>
@@ -792,70 +783,82 @@ export default function Dashboard() {
                 onClick={() => handleRefresh('rankings')}
                 disabled={refreshing === 'rankings'}
                 style={{
-                  padding: '7px 14px', background: 'var(--surface-2)', border: '1px solid var(--border)',
-                  borderRadius: 6, color: refreshing === 'rankings' ? 'var(--text-muted)' : 'var(--accent)',
-                  fontFamily: 'var(--font-mono)', fontSize: 10, cursor: refreshing === 'rankings' ? 'default' : 'pointer',
-                  letterSpacing: 1, whiteSpace: 'nowrap',
+                  padding: '9px 16px', background: 'var(--surface)', border: '1px solid var(--border)',
+                  borderRadius: 8, color: refreshing === 'rankings' ? 'var(--text-muted)' : 'var(--accent)',
+                  fontSize: 13, fontWeight: 500, cursor: refreshing === 'rankings' ? 'default' : 'pointer',
+                  boxShadow: 'var(--shadow)', fontFamily: 'var(--font-body)',
                 }}
               >
-                {refreshing === 'rankings' ? '...' : '↻ REFRESH'}
+                {refreshing === 'rankings' ? 'Refreshing...' : '↻ Refresh'}
               </button>
             </div>
+
+            {/* Feedback message */}
             {refreshMsg && (
               <div style={{
-                marginBottom: 12, padding: '8px 12px', borderRadius: 6, fontSize: 11,
-                fontFamily: 'var(--font-mono)', letterSpacing: 0.5,
-                background: refreshMsg.includes('failed') ? 'rgba(239,68,68,0.1)' : 'rgba(34,197,94,0.1)',
+                marginBottom: 14, padding: '10px 14px', borderRadius: 8, fontSize: 13, fontWeight: 500,
+                background: refreshMsg.includes('failed') ? 'rgba(255,59,48,0.08)' : 'rgba(40,167,69,0.08)',
                 color: refreshMsg.includes('failed') ? 'var(--red)' : 'var(--green)',
-                border: `1px solid ${refreshMsg.includes('failed') ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)'}`,
+                border: `1px solid ${refreshMsg.includes('failed') ? 'rgba(255,59,48,0.2)' : 'rgba(40,167,69,0.2)'}`,
               }}>
                 {refreshMsg}
               </div>
             )}
+
             {rankings.length === 0 ? (
-              <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '40px 20px', textAlign: 'center' }}>
-                <div style={{ fontSize: 14, color: 'var(--text-dim)' }}>Rankings not yet loaded</div>
+              <div style={{ ...card, padding: '48px 20px', textAlign: 'center' }}>
+                <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>Rankings not loaded</div>
+                <div style={{ fontSize: 13, color: 'var(--text-dim)' }}>Tap Refresh to pull the latest rankings</div>
               </div>
             ) : (
               <>
-                <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '45px 1fr 70px 50px', padding: '10px 16px', borderBottom: '1px solid var(--border)', fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', letterSpacing: 1.2 }}>
-                    <span>RANK</span><span>TEAM</span><span style={{ textAlign: 'center' }}>RECORD</span><span style={{ textAlign: 'center' }}>PREV</span>
+                <div style={{ ...card }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '44px 1fr 72px 52px', padding: '10px 16px', borderBottom: '1px solid var(--border)' }}>
+                    {['#', 'Team', 'Record', 'Prev'].map((h, i) => (
+                      <span key={i} style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, textAlign: i >= 2 ? 'center' : 'left' }}>{h}</span>
+                    ))}
                   </div>
                   {rankings.map((r, i) => {
                     const prevNum = parseInt(r.prev);
                     const moved = isNaN(prevNum) ? 'new' : prevNum > r.rank ? 'up' : prevNum < r.rank ? 'down' : 'same';
                     return (
                       <div key={r.rank} style={{
-                        display: 'grid', gridTemplateColumns: '45px 1fr 70px 50px', padding: '11px 16px',
+                        display: 'grid', gridTemplateColumns: '44px 1fr 72px 52px',
+                        padding: '13px 16px',
                         borderBottom: i < rankings.length - 1 ? '1px solid var(--border)' : 'none',
-                        background: i % 2 === 0 ? 'transparent' : 'var(--surface-2)', alignItems: 'center',
+                        alignItems: 'center',
                       }}>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 700, color: r.rank <= 5 ? 'var(--accent)' : 'var(--text-dim)' }}>{r.rank}</span>
-                        <span style={{ fontWeight: 700, fontSize: 14 }}>{r.team}</span>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 700, color: r.rank <= 5 ? 'var(--accent)' : 'var(--text-muted)' }}>
+                          {r.rank}
+                        </span>
+                        <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>{r.team}</span>
                         <span style={{ textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-dim)' }}>{r.record}</span>
-                        <span style={{ textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: 11, color: moved === 'up' ? 'var(--green)' : moved === 'down' ? 'var(--red)' : moved === 'new' ? 'var(--accent)' : 'var(--text-muted)' }}>
+                        <span style={{ textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 600, color: moved === 'up' ? 'var(--green)' : moved === 'down' ? 'var(--red)' : moved === 'new' ? 'var(--accent)' : 'var(--text-muted)' }}>
                           {moved === 'up' ? `▲${prevNum - r.rank}` : moved === 'down' ? `▼${r.rank - prevNum}` : moved === 'new' ? 'NR' : '–'}
                         </span>
                       </div>
                     );
                   })}
                 </div>
+
                 {alsoConsidered.length > 0 && (
-                  <div style={{ marginTop: 16, padding: '12px 16px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10 }}>
-                    <div style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1.2, marginBottom: 8 }}>ALSO CONSIDERED</div>
+                  <div style={{ ...card, marginTop: 12, padding: '14px 18px' }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>Also Considered</div>
                     <div style={{ fontSize: 13, color: 'var(--text-dim)' }}>{alsoConsidered.join(' · ')}</div>
                   </div>
                 )}
-                <div style={{ marginTop: 12, fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', lineHeight: 1.6 }}>
+
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10, lineHeight: 1.6, padding: '0 4px' }}>
                   Rankings compiled by USA Lacrosse Magazine staff and contributors with input from coaches.
                 </div>
-                <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+
+                {/* Stats refresh */}
+                <div style={{ marginTop: 20, ...card, padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                   <div>
-                    <div style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: 1 }}>TEAM STATS</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Team Stats</div>
                     {teamsUpdated && (
-                      <div style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: 1 }}>
-                        Last updated: {new Date(teamsUpdated).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>
+                        Updated {new Date(teamsUpdated).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
                       </div>
                     )}
                   </div>
@@ -863,13 +866,13 @@ export default function Dashboard() {
                     onClick={() => handleRefresh('stats')}
                     disabled={refreshing === 'stats'}
                     style={{
-                      padding: '6px 12px', background: 'var(--surface-2)', border: '1px solid var(--border)',
-                      borderRadius: 6, color: refreshing === 'stats' ? 'var(--text-muted)' : 'var(--text-dim)',
-                      fontFamily: 'var(--font-mono)', fontSize: 10, cursor: refreshing === 'stats' ? 'default' : 'pointer',
-                      letterSpacing: 1,
+                      padding: '8px 14px', background: 'var(--surface-2)', border: '1px solid var(--border)',
+                      borderRadius: 8, color: refreshing === 'stats' ? 'var(--text-muted)' : 'var(--text-dim)',
+                      fontSize: 13, fontWeight: 500, cursor: refreshing === 'stats' ? 'default' : 'pointer',
+                      fontFamily: 'var(--font-body)',
                     }}
                   >
-                    {refreshing === 'stats' ? 'REFRESHING...' : '↻ REFRESH STATS'}
+                    {refreshing === 'stats' ? 'Refreshing...' : '↻ Refresh Stats'}
                   </button>
                 </div>
               </>
@@ -877,14 +880,12 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* ─── FOOTER DISCLAIMER ─── */}
-        <div style={{ marginTop: 32, padding: '16px 0', borderTop: '1px solid var(--border)', textAlign: 'center' }}>
-          <div style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', lineHeight: 1.8, maxWidth: 600, margin: '0 auto', letterSpacing: 0.3 }}>
-            {FOOTER_DISCLAIMER}
+        {/* ─── FOOTER ─── */}
+        <div style={{ marginTop: 48, paddingTop: 20, borderTop: '1px solid var(--border)', textAlign: 'center' }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.8, maxWidth: 560, margin: '0 auto' }}>
+            For informational and entertainment purposes only. All predictions are probabilistic estimates based on publicly available NCAA data and are not guarantees of any outcome.
           </div>
-          <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: 12, letterSpacing: 0.5 }}>
-            LAX EDGE v5.0
-          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>Lax Edge v5.0</div>
         </div>
       </div>
     </div>
