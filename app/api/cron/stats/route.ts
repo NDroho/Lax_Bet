@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
 import { kv } from '@vercel/kv';
 
+export const maxDuration = 60;
+
 const STAT_PAGES: { id: string; key: string; pctField?: boolean }[] = [
   { id: '230', key: 'foWin', pctField: true },
   { id: '563', key: 'shotPct', pctField: true },
@@ -22,7 +24,7 @@ async function fetchStatPage(url: string, pctField: boolean): Promise<Record<str
   try {
     const res = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       },
       next: { revalidate: 0 },
@@ -70,17 +72,23 @@ export async function GET(request: Request) {
   }
 
   try {
+    // Fetch all stats in parallel instead of sequentially
+    const statEntries = await Promise.all(
+      STAT_PAGES.map(async (stat) => {
+        const data = await fetchStat(stat.id, stat.pctField);
+        return { key: stat.key, data };
+      })
+    );
+
     const allStats: Record<string, Record<string, number>> = {};
     const statResults: Record<string, number> = {};
 
-    for (const stat of STAT_PAGES) {
-      const data = await fetchStat(stat.id, stat.pctField);
-      statResults[stat.key] = Object.keys(data).length;
+    for (const { key, data } of statEntries) {
+      statResults[key] = Object.keys(data).length;
       for (const [team, val] of Object.entries(data)) {
         if (!allStats[team]) allStats[team] = {};
-        allStats[team][stat.key] = val;
+        allStats[team][key] = val;
       }
-      await new Promise(r => setTimeout(r, 500));
     }
 
     const teams = Object.entries(allStats)
