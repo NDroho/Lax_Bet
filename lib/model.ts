@@ -95,21 +95,54 @@ export const SOS_TIERS: Record<SOSTier, SOSTierInfo> = {
   weak:      { tier: 'weak',      label: 'Weak',      multiplier: 0.600, color: '#ef4444' },
 };
 
+// ─── CONFERENCE TIERS ───
+// Teams in power conferences earn their stats against tough opponents.
+// Teams in weak conferences inflate their numbers against easy schedules.
+// These sets cap/floor the SOS tier regardless of raw win%/margin,
+// preventing Richmond from looking elite and Duke from looking average.
+
+const POWER_CONF = new Set([
+  // ACC
+  'Duke', 'North Carolina', 'Virginia', 'Syracuse', 'Notre Dame', 'Boston College',
+  // Big Ten
+  'Penn State', 'Maryland', 'Johns Hopkins', 'Ohio State', 'Michigan', 'Rutgers',
+  // Ivy League
+  'Princeton', 'Cornell', 'Yale', 'Brown', 'Harvard', 'Dartmouth', 'Columbia', 'Pennsylvania',
+]);
+
+const WEAK_CONF = new Set([
+  // Atlantic 10
+  'Richmond', "Saint Joseph's", 'Massachusetts', 'UMass Lowell', 'La Salle', 'Davidson', 'George Mason',
+  // America East
+  'Vermont', 'Albany', 'UMBC', 'New Hampshire', 'Hartford', 'Binghamton',
+  // MAAC
+  'Marist', 'Siena', 'Fairfield', 'Manhattan', 'Quinnipiac', 'Canisius',
+  // NEC
+  'Bryant', "Mount St. Mary's", 'LIU', 'St. Francis',
+  // ASUN / SoCon / Mountain West
+  'Jacksonville', 'Bellarmine', 'High Point', 'Air Force', 'Denver',
+]);
+
 // ─── DYNAMIC SOS TIER COMPUTATION ───
-// Automatically computed from team stats — updates every Wednesday
-// when the stats cron refreshes. No manual tier assignments needed.
-//
-// Uses winPct + scoringMargin to classify teams:
-//   Elite:     dominant record AND blowing teams out
-//   Strong:    winning consistently with positive margin
-//   Ranked:    above .500 with non-negative margin
-//   Above Avg: around .500 but competitive
-//   Average:   below .500 but still winning some
-//   Weak:      bad record, getting outscored
+// Power conf teams: floored at "ranked" so tough-schedule stats aren't punished.
+// Weak conf teams: capped at "ranked" so inflated stats don't reach elite/strong.
+// Everyone else: purely stats-based as before.
 
 export function getSOSTier(team: TeamStats): SOSTierInfo {
   const wp = team.winPct ?? 0;
   const sm = team.scoringMargin ?? 0;
+
+  if (POWER_CONF.has(team.name)) {
+    if (wp >= 0.78 && sm >= 4.5) return SOS_TIERS.elite;
+    if (wp >= 0.55)              return SOS_TIERS.strong;
+    return SOS_TIERS.ranked;
+  }
+
+  if (WEAK_CONF.has(team.name)) {
+    if (wp >= 0.78 && sm >= 4.5) return SOS_TIERS.ranked;
+    if (wp >= 0.67 && sm >= 2.0) return SOS_TIERS.above_avg;
+    return SOS_TIERS.average;
+  }
 
   if (wp >= 0.78 && sm >= 4.5) return SOS_TIERS.elite;
   if (wp >= 0.67 && sm >= 2.0) return SOS_TIERS.strong;
