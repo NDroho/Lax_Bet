@@ -659,7 +659,6 @@ export default function Dashboard() {
                 <WeightSlider label="Shot %" value={weights.shotPct} onChange={v => updateWeight('shotPct', v)} accent="var(--green)" />
                 <WeightSlider label="TO Margin" value={weights.turnoverMargin} onChange={v => updateWeight('turnoverMargin', v)} accent="var(--amber)" />
                 <WeightSlider label="Save %" value={weights.savePct} onChange={v => updateWeight('savePct', v)} accent="var(--red)" />
-                <WeightSlider label="Def Efficiency" value={weights.defEff} onChange={v => updateWeight('defEff', v)} accent="#30d158" />
                 <WeightSlider label="EMO" value={weights.emo} onChange={v => updateWeight('emo', v)} accent="#bf5af2" />
                 <button onClick={() => setWeights(DEFAULT_WEIGHTS)} style={{ marginTop: 10, padding: '8px 16px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text-dim)', fontSize: 12, fontFamily: 'var(--font-body)', fontWeight: 500, cursor: 'pointer' }}>Reset to defaults</button>
               </div>
