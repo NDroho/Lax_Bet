@@ -84,7 +84,7 @@ const SPREAD_SCALAR = 0.38;
 
 // ─── D1 AVERAGE SCORING (used for total projection) ───
 // Based on 2026 season averages. Updated when season data warrants.
-const D1_AVG_GOALS_PER_GAME = 13.5;
+const D1_AVG_GOALS_PER_GAME = 12.0;
 
 // ─── SOS TIER SYSTEM ───
 
@@ -212,6 +212,18 @@ export function computePowerRating(
   return Math.round(rating * 1000) / 10;
 }
 
+// ─── HOME FIELD ADVANTAGE ───
+// Based on D1 lacrosse data, home teams win at roughly 56-58% in regular
+// season and tournament settings. That translates to approximately 1.5 goals
+// of advantage on a neutral-site-adjusted basis.
+//
+// Convention: 'A' = away team, 'B' = home team in predictMatchup.
+// homeField: 'A' = teamA is home, 'B' = teamB is home, 'neutral' = no adjustment.
+// Default is 'neutral' so existing callers without site context are unaffected.
+
+export type HomeField = 'A' | 'B' | 'neutral';
+const HOME_FIELD_GOALS = 1.5;
+
 // ─── PROJECTED TOTAL ───
 // v3 formula averaged raw scoringOff + scoringDef for both teams, which
 // double-counted and was insensitive to actual defensive matchup quality.
@@ -240,13 +252,21 @@ export function predictMatchup(
   teamB: TeamStats,
   weights: ModelWeights,
   useSOS: boolean = true,
+  homeField: HomeField = 'neutral',
 ): Prediction {
   const sosA = useSOS ? getSOSTier(teamA).multiplier : 1.0;
   const sosB = useSOS ? getSOSTier(teamB).multiplier : 1.0;
 
   const ratingA = computePowerRating(teamA, weights, sosA);
   const ratingB = computePowerRating(teamB, weights, sosB);
-  const diff = ratingA - ratingB;
+  let diff = ratingA - ratingB;
+
+  // Apply home field: positive diff favors A, negative favors B.
+  // Home team gets a rating boost equivalent to HOME_FIELD_GOALS / SPREAD_SCALAR
+  // so that after the scalar is applied the spread shifts by ~1.5 goals.
+  const hfRatingAdj = HOME_FIELD_GOALS / SPREAD_SCALAR;
+  if (homeField === 'B') diff -= hfRatingAdj;
+  if (homeField === 'A') diff += hfRatingAdj;
 
   const rawSpread = diff * SPREAD_SCALAR;
   const spread = Math.round(Math.max(-14, Math.min(14, rawSpread)) * 2) / 2;
