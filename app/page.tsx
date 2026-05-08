@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { TeamStats, ModelWeights, DEFAULT_WEIGHTS, predictMatchup, probToAmericanOdds, getConfidenceTier, SlateGame, getSOSTier } from '@/lib/model';
+import { TeamStats, ModelWeights, DEFAULT_WEIGHTS, predictMatchup, probToAmericanOdds, getConfidenceTier, SlateGame, getSOSTier, HomeField } from '@/lib/model';
 
 interface RankingEntry { rank: number; team: string; record: string; prev: string; }
 
@@ -208,6 +208,8 @@ export default function Dashboard() {
   const [fullBacktestLoading, setFullBacktestLoading] = useState(false);
   const [fullBacktestError, setFullBacktestError] = useState('');
   const [btGameFilter, setBtGameFilter] = useState<'all' | 'strong' | 'lean' | 'tossup' | 'wrong'>('all');
+  // ─── HOME FIELD ───
+  const [homeField, setHomeField] = useState<HomeField>('B'); // default: teamB is home
 
   useEffect(() => {
     try {
@@ -334,7 +336,7 @@ export default function Dashboard() {
   const sortedTeams = useMemo(() => [...teams].sort((a, b) => a.name.localeCompare(b.name)), [teams]);
   const teamA = teams.find(t => t.name === teamAName);
   const teamB = teams.find(t => t.name === teamBName);
-  const prediction = useMemo(() => teamA && teamB ? predictMatchup(teamA, teamB, weights, useSOS) : null, [teamA, teamB, weights, useSOS]);
+  const prediction = useMemo(() => teamA && teamB ? predictMatchup(teamA, teamB, weights, useSOS, homeField) : null, [teamA, teamB, weights, useSOS, homeField]);
   const updateWeight = useCallback((key: string, val: number) => setWeights(prev => ({ ...prev, [key]: val })), []);
 
   const findTeamName = useCallback((espnName: string): string | null => {
@@ -423,7 +425,7 @@ export default function Dashboard() {
       const awayTeam = awayName ? teams.find(t => t.name === awayName) : null;
       const homeTeam = homeName ? teams.find(t => t.name === homeName) : null;
       if (awayTeam && homeTeam) {
-        const pred = predictMatchup(awayTeam, homeTeam, weights, useSOS);
+        const pred = predictMatchup(awayTeam, homeTeam, weights, useSOS, 'B');
         const favIsAway = pred.winProbA >= 0.5;
         const favName = favIsAway ? game.away : game.home;
         const underdogName = favIsAway ? game.home : game.away;
@@ -580,6 +582,33 @@ export default function Dashboard() {
               </div>
             </div>
 
+            {/* Home field selector */}
+            <div style={{ ...card, marginBottom: 20, padding: '12px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Game Site</div>
+                <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 1 }}>
+                  {homeField === 'neutral' ? 'Neutral site — no home field adjustment' : homeField === 'B' ? `${teamBName || 'Home team'} has home field (+1.5 goals)` : `${teamAName || 'Away team'} has home field (+1.5 goals)`}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {(['A', 'neutral', 'B'] as HomeField[]).map(hf => (
+                  <button
+                    key={hf}
+                    onClick={() => setHomeField(hf)}
+                    style={{
+                      padding: '5px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                      cursor: 'pointer', fontFamily: 'var(--font-body)',
+                      background: homeField === hf ? 'var(--accent)' : 'var(--surface-2)',
+                      color: homeField === hf ? '#fff' : 'var(--text-dim)',
+                      border: homeField === hf ? 'none' : '1px solid var(--border)',
+                    }}
+                  >
+                    {hf === 'A' ? 'Away home' : hf === 'B' ? 'Home home' : 'Neutral'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 16, alignItems: 'start', marginBottom: 24 }}>
               <div>
                 <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Away Team</label>
@@ -659,6 +688,7 @@ export default function Dashboard() {
                 <WeightSlider label="Shot %" value={weights.shotPct} onChange={v => updateWeight('shotPct', v)} accent="var(--green)" />
                 <WeightSlider label="TO Margin" value={weights.turnoverMargin} onChange={v => updateWeight('turnoverMargin', v)} accent="var(--amber)" />
                 <WeightSlider label="Save %" value={weights.savePct} onChange={v => updateWeight('savePct', v)} accent="var(--red)" />
+                <WeightSlider label="Def Efficiency" value={weights.defEff} onChange={v => updateWeight('defEff', v)} accent="#30d158" />
                 <WeightSlider label="EMO" value={weights.emo} onChange={v => updateWeight('emo', v)} accent="#bf5af2" />
                 <button onClick={() => setWeights(DEFAULT_WEIGHTS)} style={{ marginTop: 10, padding: '8px 16px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text-dim)', fontSize: 12, fontFamily: 'var(--font-body)', fontWeight: 500, cursor: 'pointer' }}>Reset to defaults</button>
               </div>
