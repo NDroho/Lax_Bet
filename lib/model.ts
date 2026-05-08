@@ -84,7 +84,7 @@ const SPREAD_SCALAR = 0.38;
 
 // ─── D1 AVERAGE SCORING (used for total projection) ───
 // Based on 2026 season averages. Updated when season data warrants.
-const D1_AVG_GOALS_PER_GAME = 12.0;
+const D1_AVG_GOALS_PER_GAME = 13.5;
 
 // ─── SOS TIER SYSTEM ───
 
