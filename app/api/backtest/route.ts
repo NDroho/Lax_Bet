@@ -7,7 +7,6 @@ import {
   DEFAULT_WEIGHTS,
   predictMatchup,
   getSOSTier,
-  HomeField,
 } from '@/lib/model';
 
 export const maxDuration = 60;
@@ -316,7 +315,7 @@ export async function GET(request: Request) {
       let ratingHome: number | null = null;
 
       if (modelHasData && awayTeam && homeTeam) {
-        const pred = predictMatchup(awayTeam, homeTeam, weights, true, 'B');
+        const pred = predictMatchup(awayTeam, homeTeam, weights, true);
         predictedSpread = pred.spread;
         predictedTotal = pred.projTotal;
         predictedWinProbAway = pred.winProbA;
