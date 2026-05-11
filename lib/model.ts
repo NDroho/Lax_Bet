@@ -29,6 +29,7 @@ export interface ModelWeights {
   shotPct: number;
   turnoverMargin: number;
   savePct: number;
+  defEff: number;
   emo: number;
   [key: string]: number;
 }
@@ -52,41 +53,211 @@ export interface Prediction {
   mlValue: boolean;
 }
 
-// ─── DEFAULT WEIGHTS (v4 — May 8, 2026) ───
-// Backtested against 520 games (full 2026 season to date).
-// Direction accuracy: 75.4% | Spread MAE: ±4.6 | Total MAE: ±3.6
-//
-// Changes from v3:
-// - Removed defEff entirely: it was 1-oppShotPct, which is derived from savePct
-//   in the stats scraper. The two inputs were collinear — encoding the same
-//   defensive signal twice. savePct now carries the full defensive load.
-// - faceOff: 2 → 1. Near-zero win-prediction signal per D1 research; possession
-//   margin from ground balls and turnovers is more predictive than faceoff win %.
-// - turnoverMargin: 29 → 32. Strongest single predictor per analytics research
-//   (teams winning ground ball battle by 4+ win 70% of the time).
-// - savePct: 7 → 10. Now the sole defensive efficiency input; weighted up
-//   to compensate for defEff removal.
-// Total weight: 91 (vs 92 previously — faceOff -1, defEff -3, savePct +3, turnoverMargin +3)
+// ─── DEFAULT WEIGHTS (v3 — rebalanced May 11, 2026) ───
+// Diagnosis after NCAA tournament first round (3-5 SU, terrible vs spread):
+//   - v2 underweighted face-off win % (2/92) — face-off wins drive
+//     possession, which compounds in single-elimination games.
+//   - v2 overweighted turnover margin (29/92) — TO margin is the most
+//     opponent-dependent stat. UAlbany's +3 TO edge over UNC drove
+//     a "coin flip" prediction on a game that ended 24-6.
+//   - v2 underweighted save % and defensive efficiency.
+// v3 redistributes weight toward stats that travel better across
+// opponents of different strength.
 
 export const DEFAULT_WEIGHTS: ModelWeights = {
-  faceOff: 1,
-  clearPct: 15,
-  shotPct: 23,
-  turnoverMargin: 32,
-  savePct: 10,
-  emo: 10,
+  faceOff: 15,
+  clearPct: 10,
+  shotPct: 22,
+  turnoverMargin: 15,
+  savePct: 12,
+  defEff: 8,
+  emo: 8,
 };
 
 // ─── SPREAD SCALAR ───
-// v1: 0.25 | v2: 0.30 | v3: 0.38 (n=10) | v4: 0.38 (confirmed n=520, spread bias +0.8)
-// Bias of +0.8 is well within tolerance — scalar holds.
-const SPREAD_SCALAR = 0.38;
+// Controls how power rating differential converts to point spread.
+// Kept at 0.30 pending v3 backtest results.
+const SPREAD_SCALAR = 0.30;
 
-// ─── D1 AVERAGE SCORING (used for total projection) ───
-// Based on 2026 season averages. Updated when season data warrants.
-const D1_AVG_GOALS_PER_GAME = 12.0;
+// ─── WIN PROBABILITY STEEPNESS ───
+// v2 used 0.15, which produced absurd extremes (e.g. Princeton -3233 ML
+// on Marist, implying a 97% win prob — way overconfident for any single
+// lacrosse game). Softened to 0.08 to keep extreme probabilities in a
+// realistic range while preserving directional accuracy.
+const WIN_PROB_STEEPNESS = 0.08;
 
-// ─── SOS TIER SYSTEM ───
+// ─── CONFERENCE MAP ───
+// Maps team names (as stored in KV) to their D1 men's lacrosse conference.
+// Used by the SOS tier system below.
+//
+// PHASE 1 (current): hard-coded. Update this map when conferences realign
+// or when teams are added/removed from KV.
+// PHASE 2 (future): the stats cron should scrape and populate the `conf`
+// field on TeamStats, and getSOSTier should prefer team.conf when present.
+//
+// The 10 D1 conferences for 2026: ACC, America East, ASUN, Atlantic 10,
+// Big East, Big South, Big Ten, Ivy League, MAAC, Patriot League.
+// Independents (Air Force, etc.) get the 'independent' bucket.
+
+export type Conference =
+  | 'acc'
+  | 'big_ten'
+  | 'ivy'
+  | 'big_east'
+  | 'patriot'
+  | 'caa'
+  | 'atlantic_10'
+  | 'america_east'
+  | 'asun'
+  | 'big_south'
+  | 'maac'
+  | 'nec'
+  | 'saac'
+  | 'independent'
+  | 'unknown';
+
+export const CONFERENCE_MAP: Record<string, Conference> = {
+  // ─── ACC ───
+  'Duke': 'acc',
+  'North Carolina': 'acc',
+  'Notre Dame': 'acc',
+  'Syracuse': 'acc',
+  'Virginia': 'acc',
+
+  // ─── Big Ten ───
+  'Johns Hopkins': 'big_ten',
+  'Maryland': 'big_ten',
+  'Michigan': 'big_ten',
+  'Ohio St.': 'big_ten',
+  'Penn St.': 'big_ten',
+  'Rutgers': 'big_ten',
+
+  // ─── Ivy League ───
+  'Brown': 'ivy',
+  'Cornell': 'ivy',
+  'Dartmouth': 'ivy',
+  'Harvard': 'ivy',
+  'Penn': 'ivy',
+  'Princeton': 'ivy',
+  'Yale': 'ivy',
+
+  // ─── Big East ───
+  'Denver': 'big_east',
+  'Georgetown': 'big_east',
+  'Marquette': 'big_east',
+  "Saint Joseph's": 'big_east',
+  'Providence': 'big_east',
+  'Villanova': 'big_east',
+  'Xavier': 'big_east',
+
+  // ─── Patriot League ───
+  'Army West Point': 'patriot',
+  'Boston U.': 'patriot',
+  'Bucknell': 'patriot',
+  'Colgate': 'patriot',
+  'Holy Cross': 'patriot',
+  'Lafayette': 'patriot',
+  'Lehigh': 'patriot',
+  'Loyola Maryland': 'patriot',
+  'Navy': 'patriot',
+
+  // ─── Coastal Athletic Association (CAA) ───
+  'Delaware': 'caa',
+  'Drexel': 'caa',
+  'Fairfield': 'caa',
+  'Hofstra': 'caa',
+  'Massachusetts': 'caa',
+  'Monmouth': 'caa',
+  'Stony Brook': 'caa',
+  'Towson': 'caa',
+
+  // ─── Atlantic 10 ───
+  'Bellarmine': 'atlantic_10',
+  'High Point': 'atlantic_10',
+  'Richmond': 'atlantic_10',
+  'St. Bonaventure': 'atlantic_10',
+  'UMass Lowell': 'atlantic_10',
+  'VMI': 'atlantic_10',
+
+  // ─── America East ───
+  'Binghamton': 'america_east',
+  'NJIT': 'america_east',
+  'UAlbany': 'america_east',
+  'UMBC': 'america_east',
+  'Vermont': 'america_east',
+
+  // ─── ASUN (Atlantic Sun) ───
+  'Detroit Mercy': 'asun',
+  'Hampton': 'asun',
+  'Jacksonville': 'asun',
+  'Mercer': 'asun',
+  'Queens (NC)': 'asun',
+
+  // ─── Big South ───
+  'Cleveland St.': 'big_south',
+  'Robert Morris': 'big_south',
+
+  // ─── MAAC ───
+  'Canisius': 'maac',
+  'Iona': 'maac',
+  'LIU': 'maac',
+  'Manhattan': 'maac',
+  'Marist': 'maac',
+  "Mount St. Mary's": 'maac',
+  'Quinnipiac': 'maac',
+  'Sacred Heart': 'maac',
+  'Siena': 'maac',
+  "St. John's (NY)": 'maac',
+  'Wagner': 'maac',
+
+  // ─── Northeast Conference (NEC) — historical NEC teams that moved ───
+  'Bryant': 'nec',
+  'Hobart': 'nec',
+  'Merrimack': 'nec',
+  'St. Bonaventure-NEC': 'nec', // placeholder if needed
+
+  // ─── Southern (SoCon-style) / SAAC ───
+  // (none currently)
+
+  // ─── Independents ───
+  'Air Force': 'independent',
+  'Utah': 'independent',
+};
+
+// ─── CONFERENCE STRENGTH MULTIPLIERS ───
+// Reflects the realistic tier of each D1 men's lacrosse conference based on
+// year-over-year tournament performance and competitive depth. These boost
+// stats earned in tough conferences and discount stats earned in weak ones.
+//
+// Range is intentionally narrower than v2 (1.15x to 0.85x rather than 1.30x
+// to 0.65x) to avoid overcorrection. v2's 2x swing was too aggressive.
+
+const CONFERENCE_MULTIPLIER: Record<Conference, number> = {
+  acc: 1.15,           // Strongest conference top-to-bottom
+  big_ten: 1.12,       // Maryland, JHU, Penn St., Ohio St.
+  ivy: 1.10,           // Princeton, Cornell, Yale, Harvard all serious
+  big_east: 1.02,      // Top-heavy: Georgetown + Denver above mid-tier
+  patriot: 1.00,       // Army elite, rest mid-tier — neutral baseline
+  caa: 0.98,           // Towson strong, depth mixed
+  atlantic_10: 0.94,   // Richmond is an outlier; rest is weaker
+  america_east: 0.88,  // UAlbany inflated by easy conf schedule
+  asun: 0.86,          // Jacksonville inflated similarly
+  big_south: 0.92,     // Small sample; Robert Morris credible
+  maac: 0.85,          // Weakest of the AQ-eligible conferences
+  nec: 0.90,           // Hobart and Bryant are decent
+  saac: 0.85,          // placeholder
+  independent: 0.95,   // No reliable basis — give neutral-ish
+  unknown: 1.00,       // Failsafe — never penalize unmapped teams
+};
+
+// ─── SOS TIER SYSTEM (UI compatibility) ───
+// The Predictor UI in page.tsx imports SOS_TIERS and getSOSTier. We keep the
+// same shape so no UI changes are required.
+//
+// IMPORTANT CHANGE FROM v2: tiers are now derived from conference membership,
+// NOT from a team's own winPct/scoringMargin. The old system was circular:
+// teams in weak conferences ran up wins, got tagged "Elite," and had their
+// stats multiplied by 1.30 — exactly the wrong direction.
 
 export type SOSTier = 'elite' | 'strong' | 'ranked' | 'above_avg' | 'average' | 'weak';
 
@@ -98,81 +269,46 @@ export interface SOSTierInfo {
 }
 
 export const SOS_TIERS: Record<SOSTier, SOSTierInfo> = {
-  elite:     { tier: 'elite',     label: 'Elite',     multiplier: 1.400, color: '#22c55e' },
-  strong:    { tier: 'strong',    label: 'Strong',    multiplier: 1.180, color: '#3b82f6' },
-  ranked:    { tier: 'ranked',    label: 'Ranked',    multiplier: 1.055, color: '#8b5cf6' },
-  above_avg: { tier: 'above_avg', label: 'Above Avg', multiplier: 0.910, color: '#eab308' },
-  average:   { tier: 'average',   label: 'Average',   multiplier: 0.790, color: '#a1a1aa' },
-  weak:      { tier: 'weak',      label: 'Weak',      multiplier: 0.600, color: '#ef4444' },
+  elite:     { tier: 'elite',     label: 'Elite',     multiplier: 1.150, color: '#22c55e' },
+  strong:    { tier: 'strong',    label: 'Strong',    multiplier: 1.100, color: '#3b82f6' },
+  ranked:    { tier: 'ranked',    label: 'Ranked',    multiplier: 1.020, color: '#8b5cf6' },
+  above_avg: { tier: 'above_avg', label: 'Above Avg', multiplier: 0.980, color: '#eab308' },
+  average:   { tier: 'average',   label: 'Average',   multiplier: 0.920, color: '#a1a1aa' },
+  weak:      { tier: 'weak',      label: 'Weak',      multiplier: 0.850, color: '#ef4444' },
 };
 
-// ─── CONFERENCE TIERS ───
-// Power conf: floored at "ranked" — tough-schedule stats aren't punished.
-// Weak conf: capped at "above_avg" — inflated stats against weak opponents
-//   can't reach elite/strong.
-//
-// v4 fixes: removed Denver and Air Force from WEAK_CONF — both are legitimate
-// mid-major programs with consistent top-30 performance. Moved to mid-major
-// tier handled by pure stats logic.
+// Maps a conference multiplier to its displayed tier (for the UI badge).
+// The numeric multiplier on the matchup is taken from CONFERENCE_MULTIPLIER
+// directly — this function only chooses which colored badge to show.
 
-const POWER_CONF = new Set([
-  // ACC
-  'Duke', 'North Carolina', 'Virginia', 'Syracuse', 'Notre Dame', 'Boston College',
-  // Big Ten
-  'Penn State', 'Maryland', 'Johns Hopkins', 'Ohio State', 'Michigan', 'Rutgers',
-  // Ivy League
-  'Princeton', 'Cornell', 'Yale', 'Brown', 'Harvard', 'Dartmouth', 'Columbia', 'Pennsylvania',
-]);
-
-const WEAK_CONF = new Set([
-  // Atlantic 10
-  'Richmond', "Saint Joseph's", 'Massachusetts', 'UMass Lowell', 'La Salle', 'Davidson', 'George Mason',
-  // America East
-  'Vermont', 'Albany', 'UMBC', 'New Hampshire', 'Hartford', 'Binghamton',
-  // MAAC
-  'Marist', 'Siena', 'Fairfield', 'Manhattan', 'Quinnipiac', 'Canisius',
-  // NEC
-  'Bryant', "Mount St. Mary's", 'LIU', 'St. Francis',
-  // ASUN / SoCon
-  'Jacksonville', 'Bellarmine', 'High Point',
-]);
-
-// ─── DYNAMIC SOS TIER COMPUTATION ───
+function multiplierToTier(mult: number): SOSTier {
+  if (mult >= 1.13) return 'elite';
+  if (mult >= 1.08) return 'strong';
+  if (mult >= 1.00) return 'ranked';
+  if (mult >= 0.93) return 'above_avg';
+  if (mult >= 0.88) return 'average';
+  return 'weak';
+}
 
 export function getSOSTier(team: TeamStats): SOSTierInfo {
-  const wp = team.winPct ?? 0;
-  const sm = team.scoringMargin ?? 0;
-
-  if (POWER_CONF.has(team.name)) {
-    if (wp >= 0.78 && sm >= 4.5) return SOS_TIERS.elite;
-    if (wp >= 0.55)              return SOS_TIERS.strong;
-    return SOS_TIERS.ranked;
-  }
-
-  if (WEAK_CONF.has(team.name)) {
-    if (wp >= 0.78 && sm >= 4.5) return SOS_TIERS.above_avg;
-    if (wp >= 0.67 && sm >= 2.0) return SOS_TIERS.average;
-    return SOS_TIERS.average;
-  }
-
-  // Mid-major / everyone else: purely stats-based
-  if (wp >= 0.78 && sm >= 4.5) return SOS_TIERS.elite;
-  if (wp >= 0.67 && sm >= 2.0) return SOS_TIERS.strong;
-  if (wp >= 0.50 && sm >= 0)   return SOS_TIERS.ranked;
-  if (wp >= 0.40)              return SOS_TIERS.above_avg;
-  if (wp >= 0.25)              return SOS_TIERS.average;
-  return SOS_TIERS.weak;
+  const conf = CONFERENCE_MAP[team.name] ?? 'unknown';
+  const mult = CONFERENCE_MULTIPLIER[conf];
+  const tier = multiplierToTier(mult);
+  // Return the tier definition but override its multiplier with the precise
+  // conference multiplier so getSOSTier(team).multiplier is exact, not bucketed.
+  return { ...SOS_TIERS[tier], multiplier: mult };
 }
 
 // ─── NORMALIZATION ───
 
 const STAT_RANGES = {
-  faceOff:       { min: 0.35, max: 0.70 },
-  clearPct:      { min: 0.80, max: 0.96 },
-  shotPct:       { min: 0.20, max: 0.38 },
-  turnoverMargin:{ min: -6,   max: 6    },
-  savePct:       { min: 0.45, max: 0.65 },
-  emo:           { min: 0.15, max: 0.60 },
+  faceOff: { min: 0.35, max: 0.70 },
+  clearPct: { min: 0.80, max: 0.96 },
+  shotPct: { min: 0.20, max: 0.38 },
+  turnoverMargin: { min: -6, max: 6 },
+  savePct: { min: 0.45, max: 0.62 },
+  defEff: { min: 0.20, max: 0.35 },
+  emo: { min: 0.15, max: 0.60 },
 };
 
 function normalize(val: number, min: number, max: number): number {
@@ -181,25 +317,19 @@ function normalize(val: number, min: number, max: number): number {
 
 // ─── POWER RATING ───
 
-export function computePowerRating(
-  team: TeamStats,
-  weights: ModelWeights,
-  sosMultiplier: number = 1.0,
-): number {
+export function computePowerRating(team: TeamStats, weights: ModelWeights, sosMultiplier: number = 1.0): number {
   const totalWeight = Object.values(weights).reduce((a, b) => a + b, 0);
   const turnoverMargin = team.causedTurnoversPerGame - team.turnoversPerGame;
   const emoComposite = (team.manUpPct + team.manDownPct) / 2;
 
   const scores: Record<string, number> = {
-    faceOff:       normalize(team.foWin, STAT_RANGES.faceOff.min, STAT_RANGES.faceOff.max),
-    clearPct:      normalize(team.clearPct, STAT_RANGES.clearPct.min, STAT_RANGES.clearPct.max),
-    shotPct:       normalize(team.shotPct, STAT_RANGES.shotPct.min, STAT_RANGES.shotPct.max),
-    turnoverMargin:normalize(turnoverMargin, STAT_RANGES.turnoverMargin.min, STAT_RANGES.turnoverMargin.max),
-    // savePct is the sole defensive efficiency input (replaces defEff + savePct combo).
-    // Higher save % = better goalie/defense = higher rating. Range updated to 0.45-0.65
-    // to better reflect actual 2026 D1 distribution.
-    savePct:       normalize(team.savePct, STAT_RANGES.savePct.min, STAT_RANGES.savePct.max),
-    emo:           normalize(emoComposite, STAT_RANGES.emo.min, STAT_RANGES.emo.max),
+    faceOff: normalize(team.foWin, STAT_RANGES.faceOff.min, STAT_RANGES.faceOff.max),
+    clearPct: normalize(team.clearPct, STAT_RANGES.clearPct.min, STAT_RANGES.clearPct.max),
+    shotPct: normalize(team.shotPct, STAT_RANGES.shotPct.min, STAT_RANGES.shotPct.max),
+    turnoverMargin: normalize(turnoverMargin, STAT_RANGES.turnoverMargin.min, STAT_RANGES.turnoverMargin.max),
+    savePct: normalize(team.savePct, STAT_RANGES.savePct.min, STAT_RANGES.savePct.max),
+    defEff: 1 - normalize(team.oppShotPct, STAT_RANGES.defEff.min, STAT_RANGES.defEff.max),
+    emo: normalize(emoComposite, STAT_RANGES.emo.min, STAT_RANGES.emo.max),
   };
 
   let rating = 0;
@@ -207,75 +337,31 @@ export function computePowerRating(
     rating += (scores[key] || 0) * (weights[key] / totalWeight);
   }
 
+  // Apply SOS multiplier to the final rating
   rating *= sosMultiplier;
 
   return Math.round(rating * 1000) / 10;
 }
 
-// ─── HOME FIELD ADVANTAGE ───
-// Based on D1 lacrosse data, home teams win at roughly 56-58% in regular
-// season and tournament settings. That translates to approximately 1.5 goals
-// of advantage on a neutral-site-adjusted basis.
-//
-// Convention: 'A' = away team, 'B' = home team in predictMatchup.
-// homeField: 'A' = teamA is home, 'B' = teamB is home, 'neutral' = no adjustment.
-// Default is 'neutral' so existing callers without site context are unaffected.
-
-export type HomeField = 'A' | 'B' | 'neutral';
-const HOME_FIELD_GOALS = 1.5;
-
-// ─── PROJECTED TOTAL ───
-// v3 formula averaged raw scoringOff + scoringDef for both teams, which
-// double-counted and was insensitive to actual defensive matchup quality.
-//
-// v4: project each team's goals independently.
-//   Each team's expected goals = their scoringOff, adjusted by how much
-//   better or worse the opponent's defense is relative to the D1 average.
-//   A team facing an elite defense (low scoringDef) will be discounted;
-//   facing a weak defense (high scoringDef) they get a bonus.
-//
-//   defFactor = opponent scoringDef / D1_AVG_GOALS_PER_GAME
-//   expectedGoals = teamScoringOff * defFactor
-//
-// This means totals are properly sensitive to both offensive and defensive
-// quality rather than just averaging raw numbers.
-
-function projectGoals(offScoringAvg: number, oppDefScoringAvg: number): number {
-  const defFactor = oppDefScoringAvg / D1_AVG_GOALS_PER_GAME;
-  return offScoringAvg * defFactor;
-}
-
 // ─── MATCHUP PREDICTION ───
 
-export function predictMatchup(
-  teamA: TeamStats,
-  teamB: TeamStats,
-  weights: ModelWeights,
-  useSOS: boolean = true,
-  homeField: HomeField = 'neutral',
-): Prediction {
+export function predictMatchup(teamA: TeamStats, teamB: TeamStats, weights: ModelWeights, useSOS: boolean = true): Prediction {
   const sosA = useSOS ? getSOSTier(teamA).multiplier : 1.0;
   const sosB = useSOS ? getSOSTier(teamB).multiplier : 1.0;
 
   const ratingA = computePowerRating(teamA, weights, sosA);
   const ratingB = computePowerRating(teamB, weights, sosB);
-  let diff = ratingA - ratingB;
-
-  // Apply home field: positive diff favors A, negative favors B.
-  // Home team gets a rating boost equivalent to HOME_FIELD_GOALS / SPREAD_SCALAR
-  // so that after the scalar is applied the spread shifts by ~1.5 goals.
-  const hfRatingAdj = HOME_FIELD_GOALS / SPREAD_SCALAR;
-  if (homeField === 'B') diff -= hfRatingAdj;
-  if (homeField === 'A') diff += hfRatingAdj;
+  const diff = ratingA - ratingB;
 
   const rawSpread = diff * SPREAD_SCALAR;
-  const spread = Math.round(Math.max(-14, Math.min(14, rawSpread)) * 2) / 2;
-  const winProbA = 1 / (1 + Math.exp(-diff * 0.15));
+  const spread = Math.round(rawSpread * 2) / 2;
+  // Softened logistic — see WIN_PROB_STEEPNESS comment above.
+  const winProbA = 1 / (1 + Math.exp(-diff * WIN_PROB_STEEPNESS));
 
-  // Project each team's goals independently based on opponent defensive quality
-  const goalsA = projectGoals(teamA.scoringOff, teamB.scoringDef);
-  const goalsB = projectGoals(teamB.scoringOff, teamA.scoringDef);
-  const projTotal = Math.round((goalsA + goalsB) * 2) / 2;
+  const avgOff = (teamA.scoringOff + teamB.scoringOff) / 2;
+  const avgDef = (teamA.scoringDef + teamB.scoringDef) / 2;
+  const paceAdj = ((teamA.foWin + teamB.foWin) / 2 - 0.5) * 2;
+  const projTotal = Math.round((avgOff + avgDef + paceAdj) * 2) / 2;
 
   const confidence = Math.min(95, Math.round(Math.abs(diff) * 4 + 35));
   const mlValue = Math.abs(winProbA - 0.5) > 0.15;
