@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { TeamStats, ModelWeights, DEFAULT_WEIGHTS, predictMatchup, probToAmericanOdds, getConfidenceTier, SlateGame, getSOSTier, HomeField } from '@/lib/model';
+import { TeamStats, ModelWeights, DEFAULT_WEIGHTS, predictMatchup, probToAmericanOdds, getConfidenceTier, SlateGame, getSOSTier } from '@/lib/model';
 
 interface RankingEntry { rank: number; team: string; record: string; prev: string; }
 
