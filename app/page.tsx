@@ -423,7 +423,7 @@ export default function Dashboard() {
       const awayTeam = awayName ? teams.find(t => t.name === awayName) : null;
       const homeTeam = homeName ? teams.find(t => t.name === homeName) : null;
       if (awayTeam && homeTeam) {
-        const pred = predictMatchup(awayTeam, homeTeam, weights, useSOS, 'B');
+        const pred = predictMatchup(awayTeam, homeTeam, weights, useSOS);
         const favIsAway = pred.winProbA >= 0.5;
         const favName = favIsAway ? game.away : game.home;
         const underdogName = favIsAway ? game.home : game.away;
