@@ -208,8 +208,6 @@ export default function Dashboard() {
   const [fullBacktestLoading, setFullBacktestLoading] = useState(false);
   const [fullBacktestError, setFullBacktestError] = useState('');
   const [btGameFilter, setBtGameFilter] = useState<'all' | 'strong' | 'lean' | 'tossup' | 'wrong'>('all');
-  // ─── HOME FIELD ───
-  const [homeField, setHomeField] = useState<HomeField>('B'); // default: teamB is home
 
   useEffect(() => {
     try {
@@ -336,7 +334,7 @@ export default function Dashboard() {
   const sortedTeams = useMemo(() => [...teams].sort((a, b) => a.name.localeCompare(b.name)), [teams]);
   const teamA = teams.find(t => t.name === teamAName);
   const teamB = teams.find(t => t.name === teamBName);
-  const prediction = useMemo(() => teamA && teamB ? predictMatchup(teamA, teamB, weights, useSOS, homeField) : null, [teamA, teamB, weights, useSOS, homeField]);
+  const prediction = useMemo(() => teamA && teamB ? predictMatchup(teamA, teamB, weights, useSOS) : null, [teamA, teamB, weights, useSOS]);
   const updateWeight = useCallback((key: string, val: number) => setWeights(prev => ({ ...prev, [key]: val })), []);
 
   const findTeamName = useCallback((espnName: string): string | null => {
@@ -579,33 +577,6 @@ export default function Dashboard() {
               </div>
               <div onClick={() => setUseSOS(!useSOS)} style={{ width: 44, height: 26, borderRadius: 13, cursor: 'pointer', background: useSOS ? 'var(--accent)' : 'var(--bar-bg)', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
                 <div style={{ width: 20, height: 20, borderRadius: 10, background: '#fff', position: 'absolute', top: 3, left: useSOS ? 21 : 3, transition: 'left 0.2s', boxShadow: '0 1px 4px rgba(0,0,0,0.2)' }} />
-              </div>
-            </div>
-
-            {/* Home field selector */}
-            <div style={{ ...card, marginBottom: 20, padding: '12px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Game Site</div>
-                <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 1 }}>
-                  {homeField === 'neutral' ? 'Neutral site — no home field adjustment' : homeField === 'B' ? `${teamBName || 'Home team'} has home field (+1.5 goals)` : `${teamAName || 'Away team'} has home field (+1.5 goals)`}
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: 6 }}>
-                {(['A', 'neutral', 'B'] as HomeField[]).map(hf => (
-                  <button
-                    key={hf}
-                    onClick={() => setHomeField(hf)}
-                    style={{
-                      padding: '5px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-                      cursor: 'pointer', fontFamily: 'var(--font-body)',
-                      background: homeField === hf ? 'var(--accent)' : 'var(--surface-2)',
-                      color: homeField === hf ? '#fff' : 'var(--text-dim)',
-                      border: homeField === hf ? 'none' : '1px solid var(--border)',
-                    }}
-                  >
-                    {hf === 'A' ? 'Away home' : hf === 'B' ? 'Home home' : 'Neutral'}
-                  </button>
-                ))}
               </div>
             </div>
 
